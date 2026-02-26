@@ -1,0 +1,21 @@
+# Source (bundled by esbuild)
+src/
+esbuild.mjs
+tsconfig.json
+
+# Development
+node_modules/
+*.tsbuildinfo
+.vscode/
+
+# Tests
+**/__tests__/
+**/*.test.ts
+**/*.spec.ts
+
+# Config
+.eslintrc.json
+.prettierrc
+
+# Sourcemaps (production)
+dist/**/*.map

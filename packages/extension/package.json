@@ -1,0 +1,202 @@
+{
+  "name": "dbmanager",
+  "displayName": "DB Manager",
+  "description": "Database management tool for VS Code - MySQL, MariaDB, PostgreSQL, SQLite, Redis",
+  "version": "0.0.1",
+  "publisher": "addios4u",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/addios4u/dbmanager.git"
+  },
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "database",
+    "mysql",
+    "postgresql",
+    "sqlite",
+    "redis",
+    "sql"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "views": {
+      "explorer": [
+        {
+          "id": "dbmanager.connections",
+          "name": "DBManager - Connections"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "dbmanager.addConnection",
+        "title": "Add Connection",
+        "icon": "$(add)",
+        "category": "DB Manager"
+      },
+      {
+        "command": "dbmanager.editConnection",
+        "title": "Edit Connection",
+        "category": "DB Manager"
+      },
+      {
+        "command": "dbmanager.deleteConnection",
+        "title": "Delete Connection",
+        "category": "DB Manager"
+      },
+      {
+        "command": "dbmanager.connect",
+        "title": "Connect",
+        "icon": "$(plug)",
+        "category": "DB Manager"
+      },
+      {
+        "command": "dbmanager.disconnect",
+        "title": "Disconnect",
+        "icon": "$(debug-disconnect)",
+        "category": "DB Manager"
+      },
+      {
+        "command": "dbmanager.newQuery",
+        "title": "New Query",
+        "icon": "$(file-code)",
+        "category": "DB Manager"
+      },
+      {
+        "command": "dbmanager.viewTableData",
+        "title": "View Data",
+        "icon": "$(table)",
+        "category": "DB Manager"
+      },
+      {
+        "command": "dbmanager.editTableData",
+        "title": "Edit Data",
+        "category": "DB Manager"
+      },
+      {
+        "command": "dbmanager.showDDL",
+        "title": "Show DDL",
+        "category": "DB Manager"
+      },
+      {
+        "command": "dbmanager.exportTable",
+        "title": "Export",
+        "icon": "$(export)",
+        "category": "DB Manager"
+      },
+      {
+        "command": "dbmanager.refresh",
+        "title": "Refresh",
+        "icon": "$(refresh)",
+        "category": "DB Manager"
+      },
+      {
+        "command": "dbmanager.dropTable",
+        "title": "Drop Table",
+        "category": "DB Manager"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "dbmanager.addConnection",
+          "when": "view == dbmanager.connections",
+          "group": "navigation"
+        },
+        {
+          "command": "dbmanager.refresh",
+          "when": "view == dbmanager.connections",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "dbmanager.connect",
+          "when": "view == dbmanager.connections && viewItem == connection-disconnected",
+          "group": "inline"
+        },
+        {
+          "command": "dbmanager.disconnect",
+          "when": "view == dbmanager.connections && viewItem == connection-connected",
+          "group": "inline"
+        },
+        {
+          "command": "dbmanager.newQuery",
+          "when": "view == dbmanager.connections && viewItem == connection-connected",
+          "group": "inline"
+        },
+        {
+          "command": "dbmanager.editConnection",
+          "when": "view == dbmanager.connections && viewItem =~ /^connection/",
+          "group": "1_connection@1"
+        },
+        {
+          "command": "dbmanager.deleteConnection",
+          "when": "view == dbmanager.connections && viewItem =~ /^connection/",
+          "group": "1_connection@2"
+        },
+        {
+          "command": "dbmanager.viewTableData",
+          "when": "view == dbmanager.connections && viewItem == table",
+          "group": "inline"
+        },
+        {
+          "command": "dbmanager.editTableData",
+          "when": "view == dbmanager.connections && viewItem == table",
+          "group": "1_table@1"
+        },
+        {
+          "command": "dbmanager.showDDL",
+          "when": "view == dbmanager.connections && viewItem == table",
+          "group": "1_table@2"
+        },
+        {
+          "command": "dbmanager.exportTable",
+          "when": "view == dbmanager.connections && viewItem == table",
+          "group": "1_table@3"
+        },
+        {
+          "command": "dbmanager.dropTable",
+          "when": "view == dbmanager.connections && viewItem == table",
+          "group": "2_danger@1"
+        },
+        {
+          "command": "dbmanager.viewTableData",
+          "when": "view == dbmanager.connections && viewItem == view",
+          "group": "inline"
+        },
+        {
+          "command": "dbmanager.showDDL",
+          "when": "view == dbmanager.connections && viewItem == view",
+          "group": "1_view@1"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs --production",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepackage": "pnpm run build",
+    "vscode:prepublish": "pnpm run build"
+  },
+  "dependencies": {
+    "@dbmanager/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.95.0",
+    "@types/node": "^20.0.0",
+    "@vscode/vsce": "^2.32.0",
+    "esbuild": "^0.24.0",
+    "vitest": "^2.0.0"
+  }
+}

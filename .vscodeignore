@@ -1,0 +1,32 @@
+# Source files (bundled by esbuild/vite)
+packages/*/src/
+packages/*/tsconfig.json
+packages/webview-ui/vite.config.ts
+packages/extension/esbuild.mjs
+
+# Development files
+.vscode/
+.github/
+.omc/
+node_modules/
+coverage/
+*.tsbuildinfo
+
+# Config files
+.eslintrc.json
+.prettierrc
+tsconfig.base.json
+pnpm-workspace.yaml
+pnpm-lock.yaml
+
+# Documentation (not needed in VSIX)
+CLAUDE.md
+CHANGELOG.md
+.gitignore
+
+# Tests
+**/__tests__/
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx

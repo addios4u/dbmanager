@@ -1,0 +1,70 @@
+:root {
+  font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, sans-serif);
+  font-size: var(--vscode-font-size, 13px);
+  color: var(--vscode-foreground);
+  background-color: var(--vscode-editor-background);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  padding: 0;
+  overflow: hidden;
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+button {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border: none;
+  padding: 6px 14px;
+  cursor: pointer;
+  font-size: var(--vscode-font-size, 13px);
+  border-radius: 2px;
+}
+
+button:hover {
+  background: var(--vscode-button-hoverBackground);
+}
+
+button.secondary {
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+}
+
+input,
+select {
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border, transparent);
+  padding: 4px 8px;
+  font-size: var(--vscode-font-size, 13px);
+  border-radius: 2px;
+  outline: none;
+}
+
+input:focus,
+select:focus {
+  border-color: var(--vscode-focusBorder);
+}
+
+/* AG Grid 테마 오버라이드 */
+.ag-theme-alpine,
+.ag-theme-alpine-dark {
+  --ag-background-color: var(--vscode-editor-background);
+  --ag-foreground-color: var(--vscode-foreground);
+  --ag-header-background-color: var(--vscode-editorGroupHeader-tabsBackground);
+  --ag-row-hover-color: var(--vscode-list-hoverBackground);
+  --ag-selected-row-background-color: var(--vscode-list-activeSelectionBackground);
+  --ag-border-color: var(--vscode-panel-border, #333);
+}
