@@ -26,8 +26,8 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(COMMAND_IDS.ADD_CONNECTION, () => {
       panelManager.openConnectionDialog();
     }),
-    vscode.commands.registerCommand(COMMAND_IDS.REFRESH, () => {
-      treeProvider.refresh();
+    vscode.commands.registerCommand(COMMAND_IDS.REFRESH, (node?: unknown) => {
+      treeProvider.refresh(node as Parameters<typeof treeProvider.refresh>[0]);
     }),
     vscode.commands.registerCommand(COMMAND_IDS.CONNECT, (node) => {
       // node is the DbTreeNode passed from context menu

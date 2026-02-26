@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { DatabaseType, TableInfo, ColumnInfo, IndexInfo, ForeignKeyInfo, ServerInfo } from '@dbmanager/shared';
+import type { ConnectionConfig, DatabaseType, TableInfo, ColumnInfo, IndexInfo, ForeignKeyInfo, ServerInfo } from '@dbmanager/shared';
 import type { ConnectionManager } from '../services/connection-manager.js';
 import type { DatabaseAdapter, RedisAdapter } from '../adapters/base.js';
 import type { PostgresqlAdapter } from '../adapters/postgresql.js';
@@ -265,7 +265,7 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode>
     if (adapter && 'getServerInfo' in adapter) {
       try {
         const info = await (adapter as DatabaseAdapter | RedisAdapter).getServerInfo();
-        serverInfoNodes.push(...this.buildServerInfoNodes(node.connectionId, info));
+        serverInfoNodes.push(...this.buildServerInfoNodes(node.connectionId, config, info));
       } catch {
         // Server info is optional — skip on failure
       }
@@ -496,9 +496,30 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode>
     }
   }
 
-  private buildServerInfoNodes(connectionId: string, info: ServerInfo): DbTreeNode[] {
+  private buildServerInfoNodes(connectionId: string, config: ConnectionConfig, info: ServerInfo): DbTreeNode[] {
     const nodes: DbTreeNode[] = [];
 
+    // 접속 정보
+    if (config.type === 'sqlite') {
+      nodes.push({ nodeType: 'serverInfo', label: `File: ${config.filepath ?? ''}`, connectionId });
+    } else {
+      const host = config.host ?? 'localhost';
+      const port = config.port;
+      const url = port ? `${host}:${port}` : host;
+      nodes.push({ nodeType: 'serverInfo', label: `URL: ${url}`, connectionId });
+    }
+
+    if (config.username) {
+      nodes.push({ nodeType: 'serverInfo', label: `User: ${config.username}`, connectionId });
+    }
+
+    if (config.ssh?.enabled) {
+      const ssh = config.ssh;
+      const sshUrl = `${ssh.username}@${ssh.host}:${ssh.port}`;
+      nodes.push({ nodeType: 'serverInfo', label: `SSH Tunnel: ${sshUrl}`, connectionId });
+    }
+
+    // 서버 정보
     const versionLabel = info.productName
       ? `${info.productName} ${info.version}`
       : `Version: ${info.version}`;

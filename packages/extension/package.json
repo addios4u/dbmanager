@@ -176,6 +176,11 @@
           "command": "dbmanager.showDDL",
           "when": "view == dbmanager.connections && viewItem == view",
           "group": "1_view@1"
+        },
+        {
+          "command": "dbmanager.refresh",
+          "when": "view == dbmanager.connections && viewItem =~ /connection-connected|database|schemaGroup|schema|tableGroup|viewGroup|triggerGroup|extensionGroup|roleGroup|redisDb/",
+          "group": "inline"
         }
       ]
     }
