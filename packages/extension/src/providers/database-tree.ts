@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { ConnectionConfig, TableInfo, ColumnInfo, IndexInfo, ForeignKeyInfo } from '@dbmanager/shared';
+import type { DatabaseType, TableInfo, ColumnInfo, IndexInfo, ForeignKeyInfo } from '@dbmanager/shared';
 import type { ConnectionManager } from '../services/connection-manager.js';
 import type { DatabaseAdapter, RedisAdapter } from '../adapters/base.js';
 
@@ -29,6 +29,7 @@ export interface DbTreeNode {
   columnName?: string;
   redisDb?: number;
   redisKey?: string;
+  dbType?: DatabaseType;
   columnInfo?: ColumnInfo;
   indexInfo?: IndexInfo;
   foreignKeyInfo?: ForeignKeyInfo;
@@ -61,12 +62,25 @@ function getCollapsibleState(nodeType: NodeType): vscode.TreeItemCollapsibleStat
   }
 }
 
-function getIconId(node: DbTreeNode, connectionManager: ConnectionManager): vscode.ThemeIcon | undefined {
+function getConnectionIcon(
+  node: DbTreeNode,
+  connectionManager: ConnectionManager,
+  extensionUri: vscode.Uri,
+): { light: vscode.Uri; dark: vscode.Uri } | vscode.ThemeIcon {
+  const dbType = node.dbType ?? 'mysql';
+  const iconFile = `${dbType}.svg`;
+  const iconUri = vscode.Uri.joinPath(extensionUri, 'resources', 'icons', iconFile);
+  return { light: iconUri, dark: iconUri };
+}
+
+function getIconId(
+  node: DbTreeNode,
+  connectionManager: ConnectionManager,
+  extensionUri: vscode.Uri,
+): vscode.ThemeIcon | { light: vscode.Uri; dark: vscode.Uri } | undefined {
   switch (node.nodeType) {
     case 'connection':
-      return connectionManager.isConnected(node.connectionId)
-        ? new vscode.ThemeIcon('database', new vscode.ThemeColor('charts.green'))
-        : new vscode.ThemeIcon('database');
+      return getConnectionIcon(node, connectionManager, extensionUri);
     case 'database':
       return new vscode.ThemeIcon('server');
     case 'schema':
@@ -98,7 +112,10 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode>
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<DbTreeNode | undefined | null>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-  constructor(private readonly connectionManager: ConnectionManager) {
+  constructor(
+    private readonly connectionManager: ConnectionManager,
+    private readonly extensionUri: vscode.Uri,
+  ) {
     // Re-render tree when connection state changes
     this.connectionManager.onDidChangeConnections(() => this._onDidChangeTreeData.fire(null));
     this.connectionManager.onDidChangeConnectionState(() => this._onDidChangeTreeData.fire(null));
@@ -111,7 +128,7 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode>
   getTreeItem(node: DbTreeNode): vscode.TreeItem {
     const item = new vscode.TreeItem(node.label, getCollapsibleState(node.nodeType));
     item.contextValue = getContextValue(node, this.connectionManager);
-    item.iconPath = getIconId(node, this.connectionManager);
+    item.iconPath = getIconId(node, this.connectionManager, this.extensionUri);
 
     // Tooltip
     if (node.nodeType === 'column' && node.columnInfo) {
@@ -161,6 +178,7 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode>
       nodeType: 'connection',
       label: cfg.name,
       connectionId: cfg.id,
+      dbType: cfg.type,
     }));
   }
 

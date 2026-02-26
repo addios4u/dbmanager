@@ -9,8 +9,31 @@ import { QueryEditor } from './components/QueryEditor';
 import { ResultsGrid } from './components/ResultsGrid';
 import { ConnectionDialog } from './components/ConnectionDialog';
 
+interface InitialState {
+  meta?: {
+    kind?: string;
+    connectionId?: string;
+    editId?: string;
+  };
+}
+
+function getInitialViewState(): ViewState {
+  const state = (window as unknown as { __INITIAL_STATE__?: InitialState }).__INITIAL_STATE__;
+  const meta = state?.meta;
+  if (!meta) return { view: 'welcome' };
+
+  switch (meta.kind) {
+    case 'connectionDialog':
+      return { view: 'connectionDialog', editId: meta.editId };
+    case 'query':
+      return meta.connectionId ? { view: 'query', connectionId: meta.connectionId } : { view: 'welcome' };
+    default:
+      return { view: 'welcome' };
+  }
+}
+
 export default function App() {
-  const [viewState, setViewState] = useState<ViewState>({ view: 'welcome' });
+  const [viewState, setViewState] = useState<ViewState>(getInitialViewState);
   const { setConnections, setActiveConnection, connections } = useConnectionStore();
   const { setResults, setError, clear } = useResultsStore();
   const { setExecuting } = useQueryStore();
@@ -26,7 +49,9 @@ export default function App() {
           setConnections(msg.connections);
           if (msg.activeConnectionId) {
             setActiveConnection(msg.activeConnectionId);
-            setViewState({ view: 'query', connectionId: msg.activeConnectionId });
+            setViewState((prev) =>
+              prev.view === 'connectionDialog' ? prev : { view: 'query', connectionId: msg.activeConnectionId! },
+            );
           }
           break;
 

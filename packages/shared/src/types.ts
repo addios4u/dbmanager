@@ -1,5 +1,14 @@
 export type DatabaseType = 'mysql' | 'mariadb' | 'postgresql' | 'sqlite' | 'redis';
 
+export interface SshConfig {
+  enabled: boolean;
+  host: string;
+  port: number;
+  username: string;
+  authMethod: 'password' | 'privateKey';
+  privateKeyPath?: string;
+}
+
 export interface ConnectionConfig {
   id: string;
   name: string;
@@ -9,8 +18,10 @@ export interface ConnectionConfig {
   username?: string;
   database?: string;
   filepath?: string; // SQLite
+  ssl?: boolean;
   group?: string;
   color?: string;
+  ssh?: SshConfig;
 }
 
 export interface QueryResult {

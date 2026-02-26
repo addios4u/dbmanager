@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
+  <!-- Redis stacked diamond / cube -->
+  <path d="M8 1L14 5L8 9L2 5Z" fill="#D82C20" opacity="0.9"/>
+  <path d="M2 5v4l6 4V9z" fill="#A51E18"/>
+  <path d="M14 5v4l-6 4V9z" fill="#B72420"/>
+  <path d="M8 5.5L11 7L8 8.5L5 7Z" fill="#fff" opacity="0.3"/>
+</svg>

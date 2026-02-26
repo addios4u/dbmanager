@@ -13,7 +13,7 @@ const buildOptions = {
   sourcesContent: false,
   platform: 'node',
   outfile: 'dist/extension.js',
-  external: ['vscode', 'better-sqlite3'],
+  external: ['vscode', 'better-sqlite3', 'ssh2', 'cpu-features'],
   logLevel: 'warning',
   // esbuild가 @dbmanager/shared를 번들에 포함하도록 external에 넣지 않음
 };

@@ -1,6 +1,40 @@
 import * as vscode from 'vscode';
 import type { WebviewMessage, ExtensionMessage, ConnectionConfig } from '@dbmanager/shared';
 import type { ConnectionManager } from '../services/connection-manager.js';
+import { testConnection, testSshTunnel } from '../services/connection-tester.js';
+
+/** DB 드라이버 에러에서 유용한 메시지를 추출한다. */
+function formatError(err: unknown): string {
+  if (!(err instanceof Error)) {
+    return String(err) || 'Unknown error';
+  }
+  const e = err as unknown as Record<string, unknown>;
+  const parts: string[] = [];
+
+  // 메시지 본문: message → sqlMessage (mysql2) 순서로 폴백
+  const msg = err.message || (typeof e['sqlMessage'] === 'string' ? e['sqlMessage'] : '');
+  if (msg) {
+    parts.push(msg);
+  }
+
+  // 에러 코드 (ECONNREFUSED, 28P01, ER_ACCESS_DENIED 등)
+  if (typeof e['code'] === 'string') {
+    parts.push(`[${e['code']}]`);
+  }
+
+  // 시스템 에러: address:port 정보
+  if (typeof e['address'] === 'string') {
+    const addr = e['port'] ? `${e['address']}:${e['port']}` : e['address'];
+    parts.push(`(${addr})`);
+  }
+
+  // pg 에러: detail
+  if (typeof e['detail'] === 'string') {
+    parts.push(e['detail']);
+  }
+
+  return parts.join(' ') || 'Unknown error';
+}
 
 type PanelKind = 'query' | 'tableData' | 'tableEditor' | 'connectionDialog' | 'ddl' | 'export';
 
@@ -120,18 +154,17 @@ export class WebviewPanelManager {
       }
 
       case 'testConnection': {
-        // TODO: delegate to ConnectionManager
-        const resultMsg: ExtensionMessage = {
-          type: 'connectionTestResult',
-          success: false,
-          error: 'Test connection not yet implemented',
-        };
-        void panel.webview.postMessage(resultMsg);
+        void this.handleTestConnection(panel, msg.config, msg.password, msg.sshPassword, msg.sshPassphrase);
+        break;
+      }
+
+      case 'testSshTunnel': {
+        void this.handleTestSshTunnel(panel, msg.config, msg.sshPassword, msg.sshPassphrase);
         break;
       }
 
       case 'saveConnection': {
-        void this.handleSaveConnection(panel, msg.config);
+        void this.handleSaveConnection(panel, msg.config, msg.password, msg.sshPassword, msg.sshPassphrase);
         break;
       }
 
@@ -195,14 +228,82 @@ export class WebviewPanelManager {
         break;
       }
 
+      case 'browseFile': {
+        void this.handleBrowseFile(panel, msg.target);
+        break;
+      }
+
       default:
         break;
     }
   }
 
-  private async handleSaveConnection(panel: vscode.WebviewPanel, config: ConnectionConfig): Promise<void> {
+  private async handleTestConnection(
+    panel: vscode.WebviewPanel,
+    config: ConnectionConfig,
+    password?: string,
+    sshPassword?: string,
+    sshPassphrase?: string,
+  ): Promise<void> {
     try {
-      await this.connectionManager.saveConnection(config);
+      // 기존 커넥션 편집 시 비밀번호 미입력이면 저장된 비밀번호로 폴백
+      const effectivePassword = password ?? await this.connectionManager.getPassword(config.id);
+      const effectiveSshPassword = sshPassword ?? await this.connectionManager.getSshPassword(config.id);
+      const effectiveSshPassphrase = sshPassphrase ?? await this.connectionManager.getSshPassphrase(config.id);
+      await testConnection(config, effectivePassword, effectiveSshPassword, effectiveSshPassphrase);
+      const resultMsg: ExtensionMessage = {
+        type: 'connectionTestResult',
+        success: true,
+      };
+      void panel.webview.postMessage(resultMsg);
+    } catch (err) {
+      const resultMsg: ExtensionMessage = {
+        type: 'connectionTestResult',
+        success: false,
+        error: formatError(err),
+      };
+      void panel.webview.postMessage(resultMsg);
+    }
+  }
+
+  private async handleTestSshTunnel(
+    panel: vscode.WebviewPanel,
+    config: ConnectionConfig,
+    sshPassword?: string,
+    sshPassphrase?: string,
+  ): Promise<void> {
+    try {
+      const effectiveSshPassword = sshPassword ?? await this.connectionManager.getSshPassword(config.id);
+      const effectiveSshPassphrase = sshPassphrase ?? await this.connectionManager.getSshPassphrase(config.id);
+      await testSshTunnel(config, effectiveSshPassword, effectiveSshPassphrase);
+      const resultMsg: ExtensionMessage = {
+        type: 'sshTunnelTestResult',
+        success: true,
+      };
+      void panel.webview.postMessage(resultMsg);
+    } catch (err) {
+      const resultMsg: ExtensionMessage = {
+        type: 'sshTunnelTestResult',
+        success: false,
+        error: formatError(err),
+      };
+      void panel.webview.postMessage(resultMsg);
+    }
+  }
+
+  private async handleSaveConnection(
+    panel: vscode.WebviewPanel,
+    config: ConnectionConfig,
+    password?: string,
+    sshPassword?: string,
+    sshPassphrase?: string,
+  ): Promise<void> {
+    try {
+      // 기존 커넥션 편집 시 비밀번호 미입력이면 저장된 비밀번호로 폴백
+      const effectivePassword = password ?? await this.connectionManager.getPassword(config.id);
+      const effectiveSshPassword = sshPassword ?? await this.connectionManager.getSshPassword(config.id);
+      const effectiveSshPassphrase = sshPassphrase ?? await this.connectionManager.getSshPassphrase(config.id);
+      await this.connectionManager.saveConnection(config, effectivePassword, effectiveSshPassword, effectiveSshPassphrase);
       const connections = this.connectionManager.getConnectionInfos();
       const syncMsg: ExtensionMessage = {
         type: 'stateSync',
@@ -218,10 +319,43 @@ export class WebviewPanelManager {
     }
   }
 
+  private async handleBrowseFile(
+    panel: vscode.WebviewPanel,
+    target: 'sqlite' | 'sshKey',
+  ): Promise<void> {
+    const options: vscode.OpenDialogOptions =
+      target === 'sqlite'
+        ? {
+            canSelectFiles: true,
+            canSelectFolders: false,
+            canSelectMany: false,
+            title: 'Select SQLite Database File',
+            filters: { 'SQLite Database': ['db', 'sqlite', 'sqlite3', 'db3'], 'All Files': ['*'] },
+          }
+        : {
+            canSelectFiles: true,
+            canSelectFolders: false,
+            canSelectMany: false,
+            title: 'Select SSH Private Key',
+            defaultUri: vscode.Uri.file(require('os').homedir() + '/.ssh'),
+          };
+
+    const uris = await vscode.window.showOpenDialog(options);
+    const picked = uris?.[0];
+    if (picked) {
+      const pickedMsg: ExtensionMessage = {
+        type: 'filePicked',
+        target,
+        path: picked.fsPath,
+      };
+      void panel.webview.postMessage(pickedMsg);
+    }
+  }
+
   private getWebviewContent(webview: vscode.Webview, nonce: string, meta: PanelMeta): string {
     const webviewDistUri = vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'webview');
-    const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(webviewDistUri, 'index.js'));
-    const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(webviewDistUri, 'index.css'));
+    const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(webviewDistUri, 'webview.js'));
+    const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(webviewDistUri, 'webview.css'));
 
     const csp = [
       `default-src 'none'`,

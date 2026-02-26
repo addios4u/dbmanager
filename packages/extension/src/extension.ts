@@ -11,7 +11,7 @@ let panelManager: WebviewPanelManager;
 export function activate(context: vscode.ExtensionContext): void {
   // Initialize services
   connectionManager = new ConnectionManager(context);
-  treeProvider = new DatabaseTreeProvider(connectionManager);
+  treeProvider = new DatabaseTreeProvider(connectionManager, context.extensionUri);
   panelManager = new WebviewPanelManager(context, connectionManager);
 
   // Register TreeView

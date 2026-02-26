@@ -36,7 +36,16 @@
     "lint": "eslint \"packages/*/src/**/*.{ts,tsx}\"",
     "lint:fix": "eslint \"packages/*/src/**/*.{ts,tsx}\" --fix",
     "format": "prettier --write \"packages/*/src/**/*.{ts,tsx,css}\"",
+    "rebuild:sqlite": "npx @electron/rebuild --version 39.4.0 --module-dir node_modules/.pnpm/better-sqlite3@12.6.2/node_modules/better-sqlite3 --only better-sqlite3",
     "package": "pnpm build && mkdir -p out && cd packages/extension && cp ../../LICENSE . && pnpm exec vsce package --no-dependencies -o ../../out/dbmanager-$npm_package_version.vsix && rm LICENSE"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "ssh2",
+      "cpu-features",
+      "esbuild",
+      "better-sqlite3"
+    ]
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^7.18.0",

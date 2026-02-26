@@ -15,8 +15,9 @@ export type WebviewMessage =
   | { type: 'ready' }
   | { type: 'executeQuery'; connectionId: string; sql: string }
   | { type: 'cancelQuery'; queryId: string }
-  | { type: 'testConnection'; config: ConnectionConfig }
-  | { type: 'saveConnection'; config: ConnectionConfig }
+  | { type: 'testConnection'; config: ConnectionConfig; password?: string; sshPassword?: string; sshPassphrase?: string }
+  | { type: 'testSshTunnel'; config: ConnectionConfig; sshPassword?: string; sshPassphrase?: string }
+  | { type: 'saveConnection'; config: ConnectionConfig; password?: string; sshPassword?: string; sshPassphrase?: string }
   | { type: 'deleteConnection'; connectionId: string }
   | { type: 'connect'; connectionId: string }
   | { type: 'disconnect'; connectionId: string }
@@ -37,7 +38,8 @@ export type WebviewMessage =
   | { type: 'redisScan'; connectionId: string; pattern: string; cursor: string; count?: number }
   | { type: 'redisGet'; connectionId: string; key: string }
   | { type: 'redisSet'; connectionId: string; key: string; value: string; ttl?: number }
-  | { type: 'redisDel'; connectionId: string; keys: string[] };
+  | { type: 'redisDel'; connectionId: string; keys: string[] }
+  | { type: 'browseFile'; target: 'sqlite' | 'sshKey' };
 
 // Extension → Webview
 export type ExtensionMessage =
@@ -52,6 +54,7 @@ export type ExtensionMessage =
     }
   | { type: 'queryError'; queryId: string; error: string }
   | { type: 'connectionTestResult'; success: boolean; error?: string }
+  | { type: 'sshTunnelTestResult'; success: boolean; error?: string }
   | { type: 'schemaData'; connectionId: string; databases: DatabaseInfo[] }
   | {
       type: 'tableData';
@@ -73,6 +76,7 @@ export type ExtensionMessage =
       hasMore: boolean;
     }
   | { type: 'redisValue'; connectionId: string; value: RedisValue }
+  | { type: 'filePicked'; target: 'sqlite' | 'sshKey'; path: string }
   | { type: 'error'; message: string };
 
 // Re-export used types to avoid unused import warnings
