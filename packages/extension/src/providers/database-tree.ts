@@ -272,14 +272,36 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode>
     }
 
     if (config.type === 'redis') {
-      // Redis: show DB 0-15
-      const redisNodes = Array.from({ length: 16 }, (_, i): DbTreeNode => ({
-        nodeType: 'redisDb',
-        label: `DB ${i}`,
-        connectionId: node.connectionId,
-        redisDb: i,
-      }));
-      return [...redisNodes, ...serverInfoNodes];
+      const redisAdapter = adapter as RedisAdapter;
+      try {
+        const keycounts = await redisAdapter.getDbKeycounts();
+        // 키가 있는 DB만 표시
+        const redisNodes: DbTreeNode[] = [];
+        for (const [db, count] of keycounts) {
+          redisNodes.push({
+            nodeType: 'redisDb',
+            label: `DB ${db} (${count.toLocaleString()} keys)`,
+            connectionId: node.connectionId,
+            redisDb: db,
+          });
+        }
+        // 키가 하나도 없으면 DB 0만 표시
+        if (redisNodes.length === 0) {
+          redisNodes.push({
+            nodeType: 'redisDb',
+            label: 'DB 0 (empty)',
+            connectionId: node.connectionId,
+            redisDb: 0,
+          });
+        }
+        return [...redisNodes, ...serverInfoNodes];
+      } catch {
+        // fallback: DB 0만 표시
+        return [
+          { nodeType: 'redisDb', label: 'DB 0', connectionId: node.connectionId, redisDb: 0 },
+          ...serverInfoNodes,
+        ];
+      }
     }
 
     const sqlAdapter = adapter as DatabaseAdapter | undefined;
@@ -587,6 +609,7 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode>
     if (!adapter) return [];
 
     try {
+      await adapter.selectDb(node.redisDb ?? 0);
       const result = await adapter.scan('*', '0', 100);
       return result.keys.map((key): DbTreeNode => ({
         nodeType: 'redisKey',

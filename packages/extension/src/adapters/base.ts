@@ -36,6 +36,8 @@ export interface RedisAdapter {
   connect(): Promise<void>;
   disconnect(): Promise<void>;
   ping(): Promise<boolean>;
+  selectDb(db: number): Promise<void>;
+  getDbKeycounts(): Promise<Map<number, number>>;
   scan(pattern: string, cursor: string, count: number): Promise<ScanResult>;
   get(key: string): Promise<RedisValue>;
   set(key: string, value: string, ttl?: number): Promise<void>;

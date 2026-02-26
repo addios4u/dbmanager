@@ -42,6 +42,25 @@ export class RedisAdapterImpl implements IRedisAdapter {
     }
   }
 
+  async selectDb(db: number): Promise<void> {
+    if (!this.client) throw new Error('Not connected');
+    await this.client.select(db);
+  }
+
+  async getDbKeycounts(): Promise<Map<number, number>> {
+    if (!this.client) throw new Error('Not connected');
+    const info = await this.client.info('keyspace');
+    const map = new Map<number, number>();
+    // INFO keyspace returns lines like "db0:keys=10,expires=2,avg_ttl=1000"
+    for (const line of info.split('\n')) {
+      const match = line.match(/^db(\d+):keys=(\d+)/);
+      if (match) {
+        map.set(Number(match[1]), Number(match[2]));
+      }
+    }
+    return map;
+  }
+
   async scan(pattern: string, cursor: string, count: number): Promise<ScanResult> {
     if (!this.client) throw new Error('Not connected');
     const [nextCursor, keys] = await this.client.scan(cursor, 'MATCH', pattern, 'COUNT', count);
