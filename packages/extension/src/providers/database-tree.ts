@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { DatabaseType, TableInfo, ColumnInfo, IndexInfo, ForeignKeyInfo } from '@dbmanager/shared';
+import type { DatabaseType, TableInfo, ColumnInfo, IndexInfo, ForeignKeyInfo, ServerInfo } from '@dbmanager/shared';
 import type { ConnectionManager } from '../services/connection-manager.js';
 import type { DatabaseAdapter, RedisAdapter } from '../adapters/base.js';
 
@@ -16,7 +16,8 @@ export type NodeType =
   | 'index'
   | 'foreignKey'
   | 'redisDb'
-  | 'redisKey';
+  | 'redisKey'
+  | 'serverInfo';
 
 export interface DbTreeNode {
   nodeType: NodeType;
@@ -103,6 +104,8 @@ function getIconId(
       return new vscode.ThemeIcon('server-environment');
     case 'redisKey':
       return new vscode.ThemeIcon('symbol-string');
+    case 'serverInfo':
+      return new vscode.ThemeIcon('info');
     default:
       return undefined;
   }
@@ -111,6 +114,8 @@ function getIconId(
 export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode> {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<DbTreeNode | undefined | null>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
+  private readonly connectingIds = new Set<string>();
+  private readonly disconnectGen = new Map<string, number>();
 
   constructor(
     private readonly connectionManager: ConnectionManager,
@@ -118,7 +123,13 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode>
   ) {
     // Re-render tree when connection state changes
     this.connectionManager.onDidChangeConnections(() => this._onDidChangeTreeData.fire(null));
-    this.connectionManager.onDidChangeConnectionState(() => this._onDidChangeTreeData.fire(null));
+    this.connectionManager.onDidChangeConnectionState(({ connectionId, connected }) => {
+      if (!connected) {
+        // disconnect 시 세대를 올려서 VS Code가 새 노드로 인식 → 접힘 상태 리셋
+        this.disconnectGen.set(connectionId, (this.disconnectGen.get(connectionId) ?? 0) + 1);
+      }
+      this._onDidChangeTreeData.fire(null);
+    });
   }
 
   refresh(node?: DbTreeNode): void {
@@ -129,6 +140,16 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode>
     const item = new vscode.TreeItem(node.label, getCollapsibleState(node.nodeType));
     item.contextValue = getContextValue(node, this.connectionManager);
     item.iconPath = getIconId(node, this.connectionManager, this.extensionUri);
+
+    // Disconnect 시 세대(generation)가 올라가서 id가 바뀌면
+    // VS Code가 새 노드로 인식하고 collapsibleState를 Collapsed로 리셋함.
+    // Connect 시에는 세대가 변하지 않아 펼침 상태가 유지됨.
+    if (node.nodeType === 'connection') {
+      const gen = this.disconnectGen.get(node.connectionId) ?? 0;
+      item.id = `${node.connectionId}-${gen}`;
+      const connected = this.connectionManager.isConnected(node.connectionId);
+      item.description = connected ? 'Connected' : '';
+    }
 
     // Tooltip
     if (node.nodeType === 'column' && node.columnInfo) {
@@ -186,46 +207,62 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode>
     const config = this.connectionManager.getConnection(node.connectionId);
     if (!config) return [];
 
+    // Auto-connect if not connected
     if (!this.connectionManager.isConnected(node.connectionId)) {
-      return [];
+      if (this.connectingIds.has(node.connectionId)) {
+        return [];
+      }
+      this.connectingIds.add(node.connectionId);
+      try {
+        await this.connectionManager.connect(node.connectionId);
+      } catch (err) {
+        vscode.window.showErrorMessage(
+          `Failed to connect "${config.name}": ${err instanceof Error ? err.message : String(err)}`,
+        );
+        return [];
+      } finally {
+        this.connectingIds.delete(node.connectionId);
+      }
+    }
+
+    // Build server info nodes (non-fatal if adapter missing or fails)
+    const serverInfoNodes: DbTreeNode[] = [];
+    const adapter = this.connectionManager.getAdapter(node.connectionId);
+    if (adapter && 'getServerInfo' in adapter) {
+      try {
+        const info = await (adapter as DatabaseAdapter | RedisAdapter).getServerInfo();
+        serverInfoNodes.push(...this.buildServerInfoNodes(node.connectionId, info));
+      } catch {
+        // Server info is optional — skip on failure
+      }
     }
 
     if (config.type === 'redis') {
       // Redis: show DB 0-15
-      return Array.from({ length: 16 }, (_, i): DbTreeNode => ({
+      const redisNodes = Array.from({ length: 16 }, (_, i): DbTreeNode => ({
         nodeType: 'redisDb',
         label: `DB ${i}`,
         connectionId: node.connectionId,
         redisDb: i,
       }));
+      return [...redisNodes, ...serverInfoNodes];
     }
 
-    const adapter = this.connectionManager.getAdapter(node.connectionId) as DatabaseAdapter | undefined;
-    if (!adapter) return [];
+    const sqlAdapter = adapter as DatabaseAdapter | undefined;
+    if (!sqlAdapter) return serverInfoNodes;
 
     try {
-      if (config.type === 'postgresql') {
-        // PostgreSQL: databases → schemas
-        const databases = await adapter.getDatabases();
-        return databases.map((db): DbTreeNode => ({
-          nodeType: 'database',
-          label: db,
-          connectionId: node.connectionId,
-          database: db,
-        }));
-      } else {
-        // MySQL/MariaDB/SQLite: databases are schemas
-        const databases = await adapter.getDatabases();
-        return databases.map((db): DbTreeNode => ({
-          nodeType: 'database',
-          label: db,
-          connectionId: node.connectionId,
-          database: db,
-        }));
-      }
+      const databases = await sqlAdapter.getDatabases();
+      const dbNodes = databases.map((db): DbTreeNode => ({
+        nodeType: 'database',
+        label: db,
+        connectionId: node.connectionId,
+        database: db,
+      }));
+      return [...dbNodes, ...serverInfoNodes];
     } catch (err) {
       vscode.window.showErrorMessage(`Failed to load databases: ${String(err)}`);
-      return [];
+      return serverInfoNodes;
     }
   }
 
@@ -349,6 +386,44 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode>
       vscode.window.showErrorMessage(`Failed to load table details: ${String(err)}`);
       return [];
     }
+  }
+
+  private buildServerInfoNodes(connectionId: string, info: ServerInfo): DbTreeNode[] {
+    const nodes: DbTreeNode[] = [];
+
+    const versionLabel = info.productName
+      ? `${info.productName} ${info.version}`
+      : `Version: ${info.version}`;
+    nodes.push({ nodeType: 'serverInfo', label: versionLabel, connectionId });
+
+    if (info.charset) {
+      nodes.push({ nodeType: 'serverInfo', label: `Charset: ${info.charset}`, connectionId });
+    }
+
+    if (info.uptime !== undefined) {
+      nodes.push({
+        nodeType: 'serverInfo',
+        label: `Uptime: ${this.formatUptime(info.uptime)}`,
+        connectionId,
+      });
+    }
+
+    if (info.extras) {
+      for (const [key, value] of Object.entries(info.extras)) {
+        nodes.push({ nodeType: 'serverInfo', label: `${key}: ${value}`, connectionId });
+      }
+    }
+
+    return nodes;
+  }
+
+  private formatUptime(seconds: number): string {
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.floor((seconds % 86400) / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    if (days > 0) return `${days}d ${hours}h ${mins}m`;
+    if (hours > 0) return `${hours}h ${mins}m`;
+    return `${mins}m`;
   }
 
   private async getRedisDbChildren(node: DbTreeNode): Promise<DbTreeNode[]> {

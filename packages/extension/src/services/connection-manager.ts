@@ -1,6 +1,11 @@
 import * as vscode from 'vscode';
 import type { ConnectionConfig, ConnectionInfo } from '@dbmanager/shared';
 import type { DatabaseAdapter, RedisAdapter } from '../adapters/base.js';
+import { MysqlAdapter } from '../adapters/mysql.js';
+import { MariadbAdapter } from '../adapters/mariadb.js';
+import { PostgresqlAdapter } from '../adapters/postgresql.js';
+import { SqliteAdapter } from '../adapters/sqlite.js';
+import { RedisAdapterImpl } from '../adapters/redis.js';
 import { SshTunnelManager } from './ssh-tunnel.js';
 
 const CONNECTIONS_KEY = 'dbmanager.connections';
@@ -112,22 +117,49 @@ export class ConnectionManager {
       return;
     }
 
-    // Adapter creation is lazy — concrete adapters (mysql, pg, sqlite, redis)
-    // will be implemented separately. For now, we mark as connected once the
-    // adapter resolves successfully.
-    const adapter = this.adapters.get(id);
-    if (adapter) {
-      await adapter.connect();
-    } else {
-      // Adapter not yet instantiated — will be wired up when concrete adapters land.
-      // Optimistically mark connected so the tree reflects state.
-      vscode.window.showInformationMessage(
-        `Adapter for "${config.type}" is not implemented yet. Connection marked as pending.`,
-      );
+    let adapter = this.adapters.get(id);
+    if (!adapter) {
+      adapter = await this.createAdapter(id, config);
+      this.adapters.set(id, adapter);
     }
+
+    await adapter.connect();
 
     this.connectedIds.add(id);
     this._onDidChangeConnectionState.fire({ connectionId: id, connected: true });
+  }
+
+  private async createAdapter(
+    id: string,
+    config: ConnectionConfig,
+  ): Promise<DatabaseAdapter | RedisAdapter> {
+    const password = await this.getPassword(id);
+    let connectHost = config.host;
+    let connectPort = config.port;
+
+    // SSH 터널이 활성화된 경우 터널 생성 후 로컬 포트로 연결
+    if (config.ssh?.enabled) {
+      const sshPassword = await this.getSshPassword(id);
+      const sshPassphrase = await this.getSshPassphrase(id);
+      const localPort = await this.sshTunnels.createTunnel(config, sshPassword, sshPassphrase);
+      connectHost = '127.0.0.1';
+      connectPort = localPort;
+    }
+
+    switch (config.type) {
+      case 'mysql':
+        return new MysqlAdapter(config, password, connectHost, connectPort);
+      case 'mariadb':
+        return new MariadbAdapter(config, password, connectHost, connectPort);
+      case 'postgresql':
+        return new PostgresqlAdapter(config, password, connectHost, connectPort);
+      case 'sqlite':
+        return new SqliteAdapter(config);
+      case 'redis':
+        return new RedisAdapterImpl(config, password, connectHost, connectPort);
+      default:
+        throw new Error(`Unsupported database type: ${config.type}`);
+    }
   }
 
   async disconnect(id: string): Promise<void> {

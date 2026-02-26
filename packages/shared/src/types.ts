@@ -114,3 +114,11 @@ export type ViewState =
 export interface ConnectionInfo extends ConnectionConfig {
   isConnected: boolean;
 }
+
+export interface ServerInfo {
+  version: string;
+  productName?: string;
+  charset?: string;
+  uptime?: number; // seconds
+  extras?: Record<string, string>;
+}

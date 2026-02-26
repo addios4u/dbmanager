@@ -5,6 +5,7 @@ import type {
   IndexInfo,
   ForeignKeyInfo,
   RedisValue,
+  ServerInfo,
 } from '@dbmanager/shared';
 
 export interface ScanResult {
@@ -27,6 +28,7 @@ export interface DatabaseAdapter {
   getTableDDL(table: string, schema?: string): Promise<string>;
   getSchemas(): Promise<string[]>;
   getDatabases(): Promise<string[]>;
+  getServerInfo(): Promise<ServerInfo>;
   dispose(): void;
 }
 
@@ -40,5 +42,6 @@ export interface RedisAdapter {
   del(keys: string[]): Promise<number>;
   type(key: string): Promise<string>;
   ttl(key: string): Promise<number>;
+  getServerInfo(): Promise<ServerInfo>;
   dispose(): void;
 }
