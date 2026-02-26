@@ -3,6 +3,7 @@ import type { DatabaseAdapter } from './base.js';
 
 export class PostgresqlAdapter implements DatabaseAdapter {
   private pool: import('pg').Pool | undefined;
+  private currentDatabase: string | undefined;
   private queryCounter = 0;
 
   constructor(
@@ -13,18 +14,33 @@ export class PostgresqlAdapter implements DatabaseAdapter {
   ) {}
 
   async connect(): Promise<void> {
+    const db = this.config.database || undefined;
+    await this.createPool(db);
+    this.currentDatabase = db;
+  }
+
+  /** 다른 데이터베이스로 풀을 재생성하여 전환 */
+  async switchDatabase(database: string): Promise<void> {
+    if (this.currentDatabase === database) return;
+    if (this.pool) {
+      await this.pool.end();
+    }
+    await this.createPool(database);
+    this.currentDatabase = database;
+  }
+
+  private async createPool(database: string | undefined): Promise<void> {
     const { Pool } = await import('pg');
     this.pool = new Pool({
       host: this.connectHost ?? this.config.host ?? 'localhost',
       port: this.connectPort ?? this.config.port ?? 5432,
       user: this.config.username || undefined,
       password: this.password || undefined,
-      database: this.config.database || undefined,
+      database,
       max: 5,
       connectionTimeoutMillis: 10000,
       ssl: this.config.ssl ? { rejectUnauthorized: false } : undefined,
     });
-    // Verify connection
     const client = await this.pool.connect();
     client.release();
   }
@@ -97,14 +113,14 @@ export class PostgresqlAdapter implements DatabaseAdapter {
     const s = schema ?? 'public';
 
     const result = await this.pool.query(
-      `SELECT t.table_name, t.table_type,
-              (SELECT reltuples::bigint FROM pg_class
-               WHERE relname = t.table_name AND relnamespace = (
-                 SELECT oid FROM pg_namespace WHERE nspname = t.table_schema
-               )) AS row_count
-       FROM information_schema.tables t
-       WHERE t.table_schema = $1
-       ORDER BY t.table_name`,
+      `SELECT c.relname AS table_name,
+              CASE c.relkind WHEN 'v' THEN 'VIEW' ELSE 'BASE TABLE' END AS table_type,
+              GREATEST(c.reltuples::bigint, 0) AS row_count
+       FROM pg_class c
+       JOIN pg_namespace n ON n.oid = c.relnamespace
+       WHERE n.nspname = $1
+         AND c.relkind IN ('r', 'p', 'v')
+       ORDER BY c.relname`,
       [s],
     );
 
@@ -193,13 +209,24 @@ export class PostgresqlAdapter implements DatabaseAdapter {
       [s, table],
     );
 
-    return result.rows.map((r: Record<string, unknown>): IndexInfo => ({
-      name: String(r['index_name']),
-      columns: r['columns'] as string[],
-      isUnique: r['is_unique'] === true,
-      isPrimary: r['is_primary'] === true,
-      type: String(r['index_type']),
-    }));
+    return result.rows.map((r: Record<string, unknown>): IndexInfo => {
+      let cols: string[];
+      if (Array.isArray(r['columns'])) {
+        cols = r['columns'].map(String);
+      } else if (typeof r['columns'] === 'string') {
+        // pg may return "{col1,col2}" string for array_agg
+        cols = (r['columns'] as string).replace(/^\{|\}$/g, '').split(',').filter(Boolean);
+      } else {
+        cols = [];
+      }
+      return {
+        name: String(r['index_name']),
+        columns: cols,
+        isUnique: r['is_unique'] === true,
+        isPrimary: r['is_primary'] === true,
+        type: String(r['index_type']),
+      };
+    });
   }
 
   async getForeignKeys(table: string, schema?: string): Promise<ForeignKeyInfo[]> {

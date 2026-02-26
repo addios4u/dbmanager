@@ -2,12 +2,14 @@ import * as vscode from 'vscode';
 import type { DatabaseType, TableInfo, ColumnInfo, IndexInfo, ForeignKeyInfo, ServerInfo } from '@dbmanager/shared';
 import type { ConnectionManager } from '../services/connection-manager.js';
 import type { DatabaseAdapter, RedisAdapter } from '../adapters/base.js';
+import type { PostgresqlAdapter } from '../adapters/postgresql.js';
 
 export type NodeType =
   | 'group'
   | 'connection'
   | 'database'
   | 'schema'
+  | 'schemaGroup'
   | 'tableGroup'
   | 'viewGroup'
   | 'table'
@@ -17,7 +19,13 @@ export type NodeType =
   | 'foreignKey'
   | 'redisDb'
   | 'redisKey'
-  | 'serverInfo';
+  | 'serverInfo'
+  | 'triggerGroup'
+  | 'trigger'
+  | 'extensionGroup'
+  | 'extension'
+  | 'roleGroup'
+  | 'role';
 
 export interface DbTreeNode {
   nodeType: NodeType;
@@ -51,9 +59,13 @@ function getCollapsibleState(nodeType: NodeType): vscode.TreeItemCollapsibleStat
     case 'connection':
     case 'database':
     case 'schema':
+    case 'schemaGroup':
     case 'tableGroup':
     case 'viewGroup':
     case 'redisDb':
+    case 'triggerGroup':
+    case 'extensionGroup':
+    case 'roleGroup':
       return vscode.TreeItemCollapsibleState.Collapsed;
     case 'table':
     case 'view':
@@ -86,6 +98,8 @@ function getIconId(
       return new vscode.ThemeIcon('server');
     case 'schema':
       return new vscode.ThemeIcon('folder');
+    case 'schemaGroup':
+      return new vscode.ThemeIcon('folder-library');
     case 'tableGroup':
       return new vscode.ThemeIcon('list-flat');
     case 'viewGroup':
@@ -106,6 +120,18 @@ function getIconId(
       return new vscode.ThemeIcon('symbol-string');
     case 'serverInfo':
       return new vscode.ThemeIcon('info');
+    case 'triggerGroup':
+      return new vscode.ThemeIcon('zap');
+    case 'trigger':
+      return new vscode.ThemeIcon('zap');
+    case 'extensionGroup':
+      return new vscode.ThemeIcon('extensions');
+    case 'extension':
+      return new vscode.ThemeIcon('extensions');
+    case 'roleGroup':
+      return new vscode.ThemeIcon('organization');
+    case 'role':
+      return new vscode.ThemeIcon('person');
     default:
       return undefined;
   }
@@ -177,6 +203,8 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode>
         return this.getConnectionChildren(node);
       case 'database':
         return this.getDatabaseChildren(node);
+      case 'schemaGroup':
+        return this.getSchemaGroupChildren(node);
       case 'schema':
         return this.getSchemaChildren(node);
       case 'tableGroup':
@@ -188,6 +216,12 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode>
         return this.getTableChildren(node);
       case 'redisDb':
         return this.getRedisDbChildren(node);
+      case 'triggerGroup':
+        return this.getTriggerGroupChildren(node);
+      case 'extensionGroup':
+        return this.getExtensionGroupChildren(node);
+      case 'roleGroup':
+        return this.getRoleGroupChildren(node);
       default:
         return [];
     }
@@ -253,12 +287,22 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode>
 
     try {
       const databases = await sqlAdapter.getDatabases();
-      const dbNodes = databases.map((db): DbTreeNode => ({
+      const dbNodes: DbTreeNode[] = databases.map((db): DbTreeNode => ({
         nodeType: 'database',
         label: db,
         connectionId: node.connectionId,
         database: db,
       }));
+
+      // PostgreSQL: 커넥션 레벨에 Roles 추가
+      if (config.type === 'postgresql') {
+        dbNodes.push({
+          nodeType: 'roleGroup',
+          label: 'Roles',
+          connectionId: node.connectionId,
+        });
+      }
+
       return [...dbNodes, ...serverInfoNodes];
     } catch (err) {
       vscode.window.showErrorMessage(`Failed to load databases: ${String(err)}`);
@@ -273,29 +317,71 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode>
     const adapter = this.connectionManager.getAdapter(node.connectionId) as DatabaseAdapter | undefined;
     if (!adapter) return [];
 
-    try {
-      if (config.type === 'postgresql') {
-        // PostgreSQL has schemas inside databases
-        const schemas = await adapter.getSchemas();
-        return schemas.map((schema): DbTreeNode => ({
-          nodeType: 'schema',
-          label: schema,
+    if (config.type === 'postgresql') {
+      // PostgreSQL: 선택한 데이터베이스로 풀 전환
+      const pgAdapter = adapter as unknown as PostgresqlAdapter;
+      if (node.database && 'switchDatabase' in pgAdapter) {
+        try {
+          await pgAdapter.switchDatabase(node.database);
+        } catch (err) {
+          vscode.window.showErrorMessage(`Failed to switch database: ${String(err)}`);
+          return [];
+        }
+      }
+      // PostgreSQL: database → Schemas, Extensions
+      return [
+        {
+          nodeType: 'schemaGroup',
+          label: 'Schemas',
           connectionId: node.connectionId,
           database: node.database,
-          schema,
-        }));
-      } else {
-        // MySQL/MariaDB/SQLite: database → tables + views directly
-        return this.buildTableViewGroups(node, node.database);
-      }
+        },
+        {
+          nodeType: 'extensionGroup',
+          label: 'Extensions',
+          connectionId: node.connectionId,
+          database: node.database,
+        },
+      ];
+    } else {
+      // MySQL/MariaDB/SQLite: database → tables + views directly
+      return this.buildTableViewGroups(node, node.database);
+    }
+  }
+
+  private async getSchemaGroupChildren(node: DbTreeNode): Promise<DbTreeNode[]> {
+    const adapter = this.connectionManager.getAdapter(node.connectionId) as DatabaseAdapter | undefined;
+    if (!adapter) return [];
+
+    try {
+      const schemas = await adapter.getSchemas();
+      return schemas.map((schema): DbTreeNode => ({
+        nodeType: 'schema',
+        label: schema,
+        connectionId: node.connectionId,
+        database: node.database,
+        schema,
+      }));
     } catch (err) {
-      vscode.window.showErrorMessage(`Failed to load database children: ${String(err)}`);
+      vscode.window.showErrorMessage(`Failed to load schemas: ${String(err)}`);
       return [];
     }
   }
 
   private async getSchemaChildren(node: DbTreeNode): Promise<DbTreeNode[]> {
-    return this.buildTableViewGroups(node, node.schema);
+    const groups = this.buildTableViewGroups(node, node.schema);
+    // PostgreSQL 스키마에 Triggers 그룹 추가
+    const config = this.connectionManager.getConnection(node.connectionId);
+    if (config?.type === 'postgresql') {
+      groups.push({
+        nodeType: 'triggerGroup',
+        label: 'Triggers',
+        connectionId: node.connectionId,
+        database: node.database,
+        schema: node.schema,
+      });
+    }
+    return groups;
   }
 
   private buildTableViewGroups(node: DbTreeNode, schema: string | undefined): DbTreeNode[] {
@@ -424,6 +510,76 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode>
     if (days > 0) return `${days}d ${hours}h ${mins}m`;
     if (hours > 0) return `${hours}h ${mins}m`;
     return `${mins}m`;
+  }
+
+  private async getTriggerGroupChildren(node: DbTreeNode): Promise<DbTreeNode[]> {
+    const adapter = this.connectionManager.getAdapter(node.connectionId) as DatabaseAdapter | undefined;
+    if (!adapter) return [];
+
+    try {
+      const result = await adapter.execute(
+        `SELECT trigger_name, event_object_table, event_manipulation, action_timing
+         FROM information_schema.triggers
+         WHERE trigger_schema = $1
+         ORDER BY trigger_name`,
+        [node.schema ?? 'public'],
+      );
+      return result.rows.map((r): DbTreeNode => ({
+        nodeType: 'trigger',
+        label: `${String(r['trigger_name'])} (${String(r['action_timing'])} ${String(r['event_manipulation'])} ON ${String(r['event_object_table'])})`,
+        connectionId: node.connectionId,
+        database: node.database,
+        schema: node.schema,
+      }));
+    } catch (err) {
+      vscode.window.showErrorMessage(`Failed to load triggers: ${String(err)}`);
+      return [];
+    }
+  }
+
+  private async getExtensionGroupChildren(node: DbTreeNode): Promise<DbTreeNode[]> {
+    const adapter = this.connectionManager.getAdapter(node.connectionId) as DatabaseAdapter | undefined;
+    if (!adapter) return [];
+
+    try {
+      const result = await adapter.execute(
+        `SELECT extname, extversion FROM pg_extension ORDER BY extname`,
+      );
+      return result.rows.map((r): DbTreeNode => ({
+        nodeType: 'extension',
+        label: `${String(r['extname'])} (${String(r['extversion'])})`,
+        connectionId: node.connectionId,
+        database: node.database,
+      }));
+    } catch (err) {
+      vscode.window.showErrorMessage(`Failed to load extensions: ${String(err)}`);
+      return [];
+    }
+  }
+
+  private async getRoleGroupChildren(node: DbTreeNode): Promise<DbTreeNode[]> {
+    const adapter = this.connectionManager.getAdapter(node.connectionId) as DatabaseAdapter | undefined;
+    if (!adapter) return [];
+
+    try {
+      const result = await adapter.execute(
+        `SELECT rolname, rolsuper, rolcanlogin FROM pg_roles ORDER BY rolname`,
+      );
+      return result.rows.map((r): DbTreeNode => {
+        const flags: string[] = [];
+        if (r['rolsuper'] === true) flags.push('superuser');
+        if (r['rolcanlogin'] === true) flags.push('login');
+        const suffix = flags.length > 0 ? ` (${flags.join(', ')})` : '';
+        return {
+          nodeType: 'role',
+          label: `${String(r['rolname'])}${suffix}`,
+          connectionId: node.connectionId,
+        };
+      });
+    } catch (err) {
+      vscode.window.showErrorMessage(`Failed to load roles: ${String(err)}`);
+      return [];
+    }
   }
 
   private async getRedisDbChildren(node: DbTreeNode): Promise<DbTreeNode[]> {
