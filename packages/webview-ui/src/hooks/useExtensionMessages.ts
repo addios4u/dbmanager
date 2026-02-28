@@ -68,7 +68,7 @@ export function useExtensionMessages(): void {
           break;
 
         case 'editResult':
-          // Handled by TableEditorView directly via its own listener
+          // Handled by TableDataView directly via its own listener
           break;
 
         case 'exportComplete':

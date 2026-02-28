@@ -49,7 +49,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand(COMMAND_IDS.EDIT_TABLE_DATA, (node) => {
       const n = node as { connectionId: string; tableName: string; schema?: string; database?: string };
-      panelManager.openTableEditor(n.connectionId, n.tableName, n.schema, n.database);
+      panelManager.openTableData(n.connectionId, n.tableName, n.schema, n.database);
     }),
     vscode.commands.registerCommand(COMMAND_IDS.SHOW_DDL, (node) => {
       const n = node as { connectionId: string; tableName: string; schema?: string; database?: string };

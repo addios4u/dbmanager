@@ -154,14 +154,9 @@
           "group": "inline"
         },
         {
-          "command": "dbmanager.editTableData",
-          "when": "view == dbmanager.connections && viewItem == table",
-          "group": "1_table@1"
-        },
-        {
           "command": "dbmanager.showDDL",
           "when": "view == dbmanager.connections && viewItem == table",
-          "group": "1_table@2"
+          "group": "1_table@1"
         },
         {
           "command": "dbmanager.exportTable",

@@ -70,11 +70,6 @@ export class WebviewPanelManager {
     this.showOrCreate(key, `${tableName} — Data`, { kind: 'tableData', connectionId, tableName, schema, database });
   }
 
-  openTableEditor(connectionId: string, tableName: string, schema?: string, database?: string): void {
-    const key = `tableEditor:${connectionId}:${database ?? ''}:${schema ?? ''}:${tableName}`;
-    this.showOrCreate(key, `${tableName} — Edit`, { kind: 'tableEditor', connectionId, tableName, schema, database });
-  }
-
   openConnectionDialog(editId?: string): void {
     const key = editId ? `connectionDialog:${editId}` : 'connectionDialog:new';
     const title = editId ? 'Edit Connection' : 'New Connection';

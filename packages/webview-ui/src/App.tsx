@@ -10,7 +10,6 @@ import { ResultsGrid } from './components/ResultsGrid';
 import { ConnectionDialog } from './components/ConnectionDialog';
 import { WelcomeView } from './components/WelcomeView';
 import { TableDataView } from './components/TableDataView';
-import { TableEditorView } from './components/TableEditorView';
 import { DDLView } from './components/DDLView';
 import { ExportDialog } from './components/ExportDialog';
 import { RedisBrowser } from './components/RedisBrowser';
@@ -38,8 +37,9 @@ function getInitialViewState(): ViewState {
         ? { view: 'tableData', connectionId: meta.connectionId, table: meta.tableName, schema: meta.schema, database: meta.database }
         : { view: 'welcome' };
     case 'tableEditor':
+      // Legacy: tableEditor now handled by unified TableDataView
       return meta.connectionId && meta.tableName
-        ? { view: 'tableEditor', connectionId: meta.connectionId, table: meta.tableName, schema: meta.schema, database: meta.database }
+        ? { view: 'tableData', connectionId: meta.connectionId, table: meta.tableName, schema: meta.schema, database: meta.database }
         : { view: 'welcome' };
     case 'ddl':
       return meta.connectionId && meta.tableName
@@ -145,15 +145,6 @@ export default function App() {
 
         {viewState.view === 'tableData' && (
           <TableDataView
-            connectionId={viewState.connectionId}
-            table={viewState.table}
-            schema={viewState.schema}
-            database={viewState.database}
-          />
-        )}
-
-        {viewState.view === 'tableEditor' && (
-          <TableEditorView
             connectionId={viewState.connectionId}
             table={viewState.table}
             schema={viewState.schema}

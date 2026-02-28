@@ -9,6 +9,7 @@ interface ContextHeaderProps {
   table?: string;
   extraInfo?: string;
   badge?: string;
+  actions?: React.ReactNode;
 }
 
 const DB_TYPE_COLORS: Record<DatabaseType, string> = {
@@ -34,6 +35,7 @@ export function ContextHeader({
   table,
   extraInfo,
   badge,
+  actions,
 }: ContextHeaderProps) {
   const connections = useConnectionStore((s) => s.connections);
   const connection = connections.find((c) => c.id === connectionId);
@@ -113,6 +115,8 @@ export function ContextHeader({
           </React.Fragment>
         ))}
       </span>
+
+      {actions}
 
       {extraInfo && (
         <span
