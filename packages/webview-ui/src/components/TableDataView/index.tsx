@@ -25,6 +25,11 @@ interface CellEditInfo {
   rowData: Record<string, unknown>;
 }
 
+function isBooleanType(columnType: string): boolean {
+  const t = columnType.toLowerCase();
+  return t === 'boolean' || t === 'bool' || t === 'tinyint(1)' || t === 'bit(1)';
+}
+
 export function TableDataView({ connectionId, table, schema, database }: TableDataViewProps) {
   const { columns, rows, totalRows, offset, primaryKeys, isLoading } = useTableDataStore();
   const [whereClause, setWhereClause] = useState('');
@@ -113,9 +118,11 @@ export function TableDataView({ connectionId, table, schema, database }: TableDa
       setEditValue(
         currentValue === null || currentValue === undefined
           ? ''
-          : typeof currentValue === 'object'
-            ? JSON.stringify(currentValue)
-            : String(currentValue),
+          : isBooleanType(col.type)
+            ? (currentValue ? 'true' : 'false')
+            : typeof currentValue === 'object'
+              ? JSON.stringify(currentValue)
+              : String(currentValue),
       );
       setStatusError(undefined);
     },
@@ -132,6 +139,8 @@ export function TableDataView({ connectionId, table, schema, database }: TableDa
     let newValue: unknown;
     if (editingCell.nullable && editValue === '') {
       newValue = null;
+    } else if (isBooleanType(editingCell.columnType)) {
+      newValue = editValue === 'true';
     } else {
       newValue = editValue;
     }
@@ -364,25 +373,62 @@ export function TableDataView({ connectionId, table, schema, database }: TableDa
                     : String(editingCell.currentValue)}
               </span>
             </div>
-            <textarea
-              value={editValue}
-              onChange={(e) => setEditValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSaveCell(); }
-                if (e.key === 'Escape') setEditingCell(null);
-              }}
-              placeholder={editingCell.nullable ? 'Empty = NULL' : 'Enter value...'}
-              rows={3}
-              autoFocus
-              style={{
-                width: '100%',
-                fontSize: 13,
-                padding: '6px 8px',
-                fontFamily: 'var(--vscode-editor-font-family, monospace)',
-                resize: 'vertical',
-                boxSizing: 'border-box',
-              }}
-            />
+            {isBooleanType(editingCell.columnType) ? (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={() => setEditValue('true')}
+                  style={{
+                    flex: 1,
+                    fontSize: 13,
+                    padding: '6px 8px',
+                    fontWeight: editValue === 'true' ? 700 : 400,
+                    background: editValue === 'true' ? 'var(--vscode-button-background, #0e639c)' : 'transparent',
+                    color: editValue === 'true' ? 'var(--vscode-button-foreground, #fff)' : 'var(--vscode-foreground)',
+                    border: '1px solid var(--vscode-panel-border, #333)',
+                    borderRadius: 4,
+                    cursor: 'pointer',
+                  }}
+                >
+                  TRUE
+                </button>
+                <button
+                  onClick={() => setEditValue('false')}
+                  style={{
+                    flex: 1,
+                    fontSize: 13,
+                    padding: '6px 8px',
+                    fontWeight: editValue === 'false' ? 700 : 400,
+                    background: editValue === 'false' ? 'var(--vscode-button-background, #0e639c)' : 'transparent',
+                    color: editValue === 'false' ? 'var(--vscode-button-foreground, #fff)' : 'var(--vscode-foreground)',
+                    border: '1px solid var(--vscode-panel-border, #333)',
+                    borderRadius: 4,
+                    cursor: 'pointer',
+                  }}
+                >
+                  FALSE
+                </button>
+              </div>
+            ) : (
+              <textarea
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSaveCell(); }
+                  if (e.key === 'Escape') setEditingCell(null);
+                }}
+                placeholder={editingCell.nullable ? 'Empty = NULL' : 'Enter value...'}
+                rows={3}
+                autoFocus
+                style={{
+                  width: '100%',
+                  fontSize: 13,
+                  padding: '6px 8px',
+                  fontFamily: 'var(--vscode-editor-font-family, monospace)',
+                  resize: 'vertical',
+                  boxSizing: 'border-box',
+                }}
+              />
+            )}
             {statusError && (
               <div style={{ fontSize: 11, color: 'var(--vscode-errorForeground, #f44)', marginTop: 6 }}>
                 {statusError}

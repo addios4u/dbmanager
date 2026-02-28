@@ -149,11 +149,6 @@
           "group": "1_connection@2"
         },
         {
-          "command": "dbmanager.viewTableData",
-          "when": "view == dbmanager.connections && viewItem == table",
-          "group": "inline"
-        },
-        {
           "command": "dbmanager.showDDL",
           "when": "view == dbmanager.connections && viewItem == table",
           "group": "1_table@1"
@@ -169,19 +164,9 @@
           "group": "2_danger@1"
         },
         {
-          "command": "dbmanager.viewTableData",
-          "when": "view == dbmanager.connections && viewItem == view",
-          "group": "inline"
-        },
-        {
           "command": "dbmanager.showDDL",
           "when": "view == dbmanager.connections && viewItem == view",
           "group": "1_view@1"
-        },
-        {
-          "command": "dbmanager.viewRedisData",
-          "when": "view == dbmanager.connections && viewItem == redisDb",
-          "group": "inline"
         },
         {
           "command": "dbmanager.viewRedisData",

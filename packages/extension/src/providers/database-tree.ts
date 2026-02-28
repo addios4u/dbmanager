@@ -190,6 +190,24 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode>
       );
     }
 
+    // 테이블/뷰 클릭 시 데이터 뷰 열기
+    if (node.nodeType === 'table' || node.nodeType === 'view') {
+      item.command = {
+        command: 'dbmanager.viewTableData',
+        title: 'View Data',
+        arguments: [node],
+      };
+    }
+
+    // Redis DB 클릭 시 브라우저 열기
+    if (node.nodeType === 'redisDb') {
+      item.command = {
+        command: 'dbmanager.viewRedisData',
+        title: 'Browse Keys',
+        arguments: [node],
+      };
+    }
+
     return item;
   }
 
