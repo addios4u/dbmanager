@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import Editor, { type OnMount } from '@monaco-editor/react';
 import type { editor as monacoEditor } from 'monaco-editor';
 import { useQueryStore } from '../../stores/query';
@@ -13,14 +13,16 @@ export function QueryEditor({ connectionId }: QueryEditorProps) {
   const { sql, isExecuting, setSql, setExecuting } = useQueryStore();
   const { connections } = useConnectionStore();
   const editorRef = useRef<monacoEditor.IStandaloneCodeEditor | null>(null);
+  const executeRef = useRef<() => void>(() => {});
 
   const activeConnection = connections.find((c) => c.id === connectionId);
 
   const executeQuery = useCallback(() => {
-    if (isExecuting) return;
+    const { sql: currentSql, isExecuting: busy } = useQueryStore.getState();
+    if (busy) return;
 
     // Use selected text if any, otherwise full SQL
-    let sqlToRun = sql;
+    let sqlToRun = currentSql;
     const ed = editorRef.current;
     if (ed) {
       const selection = ed.getSelection();
@@ -34,9 +36,14 @@ export function QueryEditor({ connectionId }: QueryEditorProps) {
 
     if (!sqlToRun.trim()) return;
     const queryId = `q-${Date.now()}`;
-    setExecuting(true, queryId);
+    useQueryStore.getState().setExecuting(true, queryId);
     postMessage({ type: 'executeQuery', connectionId, sql: sqlToRun });
-  }, [sql, isExecuting, connectionId, setExecuting]);
+  }, [connectionId]);
+
+  // Keep ref in sync so the Monaco command always calls latest version
+  useEffect(() => {
+    executeRef.current = executeQuery;
+  }, [executeQuery]);
 
   const handleMount: OnMount = useCallback(
     (editor, monaco) => {
@@ -45,11 +52,11 @@ export function QueryEditor({ connectionId }: QueryEditorProps) {
       editor.addCommand(
         monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter,
         () => {
-          executeQuery();
+          executeRef.current();
         },
       );
     },
-    [executeQuery],
+    [],
   );
 
   // VS Code テーマに合わせてMonacoテーマを選択
