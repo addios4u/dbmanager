@@ -18,7 +18,7 @@ import { useRedisStore } from '../stores/redis';
 export function useExtensionMessages(): void {
   const { setConnections, setActiveConnection } = useConnectionStore();
   const { setResults, setError: setResultsError } = useResultsStore();
-  const { setExecuting } = useQueryStore();
+  const { setExecuting, setDatabases: setQueryDatabases, setSchemas: setQuerySchemas } = useQueryStore();
   const { setDatabases } = useSchemaStore();
   const { setTableData, setLoading: setTableLoading } = useTableDataStore();
   const { setKeys, setSelectedValue, setScanning, setLoadingValue } = useRedisStore();
@@ -91,6 +91,14 @@ export function useExtensionMessages(): void {
           setResultsError(msg.message);
           break;
 
+        case 'databaseList':
+          setQueryDatabases(msg.databases);
+          break;
+
+        case 'schemaList':
+          setQuerySchemas(msg.schemas);
+          break;
+
         case 'filePicked':
         case 'connectionTestResult':
         case 'sshTunnelTestResult':
@@ -111,6 +119,8 @@ export function useExtensionMessages(): void {
     setResults,
     setResultsError,
     setExecuting,
+    setQueryDatabases,
+    setQuerySchemas,
     setDatabases,
     setTableData,
     setTableLoading,

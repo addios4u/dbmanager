@@ -107,6 +107,12 @@
         "title": "Browse Keys",
         "icon": "$(database)",
         "category": "DB Manager"
+      },
+      {
+        "command": "dbmanager.openSqlFile",
+        "title": "Open in DB Manager Query",
+        "icon": "$(play)",
+        "category": "DB Manager"
       }
     ],
     "menus": {
@@ -192,6 +198,20 @@
           "command": "dbmanager.refresh",
           "when": "view == dbmanager.connections && viewItem =~ /connection-connected|database-|schemaGroup|schema-|tableGroup|viewGroup|triggerGroup|extensionGroup|roleGroup|redisDb/",
           "group": "inline"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "dbmanager.openSqlFile",
+          "when": "resourceExtname == .sql",
+          "group": "navigation"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "dbmanager.openSqlFile",
+          "when": "resourceExtname == .sql",
+          "group": "navigation"
         }
       ]
     }

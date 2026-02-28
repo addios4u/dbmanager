@@ -91,6 +91,52 @@ export function activate(context: vscode.ExtensionContext): void {
       const n = node as { connectionId: string; redisDb?: number };
       panelManager.openRedisBrowser(n.connectionId, n.redisDb);
     }),
+    vscode.commands.registerCommand(COMMAND_IDS.OPEN_SQL_FILE, async (uri?: vscode.Uri) => {
+      // Resolve file URI: from explorer context menu or from active editor
+      let fileUri = uri;
+      if (!fileUri) {
+        const activeEditor = vscode.window.activeTextEditor;
+        if (activeEditor && activeEditor.document.languageId === 'sql') {
+          fileUri = activeEditor.document.uri;
+        }
+      }
+      if (!fileUri) {
+        vscode.window.showWarningMessage('No SQL file selected.');
+        return;
+      }
+
+      // Read file content
+      const content = await vscode.workspace.fs.readFile(fileUri);
+      const sql = Buffer.from(content).toString('utf-8');
+      const fileName = fileUri.path.split('/').pop() ?? 'query.sql';
+
+      // Pick connection
+      const connInfos = connectionManager.getConnectionInfos();
+      if (connInfos.length === 0) {
+        vscode.window.showWarningMessage('No database connections configured. Add a connection first.');
+        return;
+      }
+
+      // Use last-used connection or prompt the user
+      const lastConnId = context.globalState.get<string>('dbmanager.lastQueryConnectionId');
+      let connectionId = lastConnId && connInfos.some((c) => c.id === lastConnId) ? lastConnId : undefined;
+
+      if (!connectionId) {
+        if (connInfos.length === 1) {
+          connectionId = connInfos[0]!.id;
+        } else {
+          const picked = await vscode.window.showQuickPick(
+            connInfos.map((c) => ({ label: c.name, description: c.type, id: c.id })),
+            { placeHolder: 'Select a database connection for this query' },
+          );
+          if (!picked) return;
+          connectionId = picked.id;
+        }
+      }
+
+      await context.globalState.update('dbmanager.lastQueryConnectionId', connectionId);
+      panelManager.openQueryEditorWithSql(connectionId, sql, fileName);
+    }),
   );
 }
 

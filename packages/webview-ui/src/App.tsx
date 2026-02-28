@@ -15,6 +15,7 @@ import { ExportDialog } from './components/ExportDialog';
 import { RedisBrowser } from './components/RedisBrowser';
 import { SplitPane } from './components/SplitPane';
 import { ContextHeader } from './components/ContextHeader';
+import { QueryContextSelector } from './components/QueryContextSelector';
 
 interface InitialState {
   meta?: PanelMeta;
@@ -29,9 +30,14 @@ function getInitialViewState(): ViewState {
     case 'connectionDialog':
       return { view: 'connectionDialog', editId: meta.editId };
     case 'query':
-      return meta.connectionId
-        ? { view: 'query', connectionId: meta.connectionId }
-        : { view: 'welcome' };
+      if (meta.connectionId) {
+        // Pre-fill SQL editor if initial SQL is provided (e.g. from .sql file)
+        if (meta.initialSql) {
+          useQueryStore.getState().setSql(meta.initialSql);
+        }
+        return { view: 'query', connectionId: meta.connectionId };
+      }
+      return { view: 'welcome' };
     case 'tableData':
       return meta.connectionId && meta.tableName
         ? { view: 'tableData', connectionId: meta.connectionId, table: meta.tableName, schema: meta.schema, database: meta.database }
@@ -188,14 +194,17 @@ export default function App() {
 
 // ---- Query sub-view (kept inline — composes existing components with SplitPane) ----
 
-function QueryView({ connectionId }: { connectionId: string }) {
-  const { isExecuting } = useQueryStore();
+function QueryView({ connectionId: initialConnectionId }: { connectionId: string }) {
+  const [activeConnectionId, setActiveConnectionId] = useState(initialConnectionId);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <ContextHeader connectionId={connectionId} extraInfo={isExecuting ? 'Executing...' : undefined} />
+      <QueryContextSelector
+        connectionId={activeConnectionId}
+        onConnectionChange={setActiveConnectionId}
+      />
       <SplitPane initialRatio={0.4} minTopHeight={120} minBottomHeight={100}>
-        <QueryEditor connectionId={connectionId} />
+        <QueryEditor connectionId={activeConnectionId} />
         <ResultsGrid />
       </SplitPane>
     </div>

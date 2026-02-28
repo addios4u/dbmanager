@@ -65,6 +65,16 @@ export class WebviewPanelManager {
     this.showOrCreate(key, `Query — ${this.getConnectionLabel(connectionId)}`, { kind: 'query', connectionId, database });
   }
 
+  openQueryEditorWithSql(connectionId: string, sql: string, fileName?: string): void {
+    const label = fileName ?? 'SQL';
+    const key = `query:${connectionId}:${fileName ?? ''}`;
+    this.showOrCreate(key, `${label} — ${this.getConnectionLabel(connectionId)}`, {
+      kind: 'query',
+      connectionId,
+      initialSql: sql,
+    });
+  }
+
   openTableData(connectionId: string, tableName: string, schema?: string, database?: string): void {
     const key = `tableData:${connectionId}:${database ?? ''}:${schema ?? ''}:${tableName}`;
     this.showOrCreate(key, `${tableName} — Data`, { kind: 'tableData', connectionId, tableName, schema, database });
@@ -288,6 +298,21 @@ export class WebviewPanelManager {
         break;
       }
 
+      case 'getDatabases': {
+        void this.handleGetDatabases(panel, msg.connectionId);
+        break;
+      }
+
+      case 'getSchemas': {
+        void this.handleGetSchemas(panel, msg.connectionId, msg.database);
+        break;
+      }
+
+      case 'switchQueryContext': {
+        void this.handleSwitchQueryContext(panel, meta, msg.connectionId, msg.database, msg.schema);
+        break;
+      }
+
       default:
         break;
     }
@@ -318,6 +343,74 @@ export class WebviewPanelManager {
       // reconnect failed
     }
     return null;
+  }
+
+  private async handleGetDatabases(panel: vscode.WebviewPanel, connectionId: string): Promise<void> {
+    const dbAdapter = await this.ensureConnected(connectionId);
+    if (!dbAdapter) return;
+    try {
+      const databases = await dbAdapter.getDatabases();
+      const msg: ExtensionMessage = { type: 'databaseList', connectionId, databases };
+      void panel.webview.postMessage(msg);
+    } catch {
+      // silently ignore
+    }
+  }
+
+  private async handleGetSchemas(panel: vscode.WebviewPanel, connectionId: string, database?: string): Promise<void> {
+    const dbAdapter = await this.ensureConnected(connectionId);
+    if (!dbAdapter) return;
+    try {
+      const schemas = await dbAdapter.getSchemas();
+      const msg: ExtensionMessage = { type: 'schemaList', connectionId, schemas };
+      void panel.webview.postMessage(msg);
+    } catch {
+      // silently ignore
+    }
+  }
+
+  private async handleSwitchQueryContext(
+    panel: vscode.WebviewPanel,
+    meta: PanelMeta,
+    connectionId: string,
+    database?: string,
+    schema?: string,
+  ): Promise<void> {
+    const dbAdapter = await this.ensureConnected(connectionId);
+    if (!dbAdapter) {
+      const errMsg: ExtensionMessage = { type: 'error', message: 'Failed to connect to database.' };
+      void panel.webview.postMessage(errMsg);
+      return;
+    }
+
+    const config = this.connectionManager.getConnection(connectionId);
+    const dbType = config?.type;
+
+    try {
+      if (database) {
+        if (dbType === 'mysql' || dbType === 'mariadb') {
+          await dbAdapter.execute(`USE ${quoteIdentifier(database, dbType)}`);
+        } else if (dbType === 'postgresql') {
+          // PostgreSQL adapter has switchDatabase method
+          const pgAdapter = dbAdapter as DatabaseAdapter & { switchDatabase?(db: string): Promise<void> };
+          if (pgAdapter.switchDatabase) {
+            await pgAdapter.switchDatabase(database);
+          }
+        }
+        // SQLite: no database switching needed
+      }
+
+      if (schema && dbType === 'postgresql') {
+        await dbAdapter.execute(`SET search_path TO ${quoteIdentifier(schema, dbType)}`);
+      }
+
+      // Update meta so subsequent queries use new context
+      meta.database = database;
+      meta.schema = schema;
+    } catch (err) {
+      const errMsg: ExtensionMessage = { type: 'error', message: formatError(err) };
+      void panel.webview.postMessage(errMsg);
+    }
   }
 
   private async handleExecuteQuery(

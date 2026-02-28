@@ -1,5 +1,6 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useRef } from 'react';
 import Editor, { type OnMount } from '@monaco-editor/react';
+import type { editor as monacoEditor } from 'monaco-editor';
 import { useQueryStore } from '../../stores/query';
 import { useConnectionStore } from '../../stores/connection';
 import { postMessage } from '../../vscode-api';
@@ -11,19 +12,36 @@ interface QueryEditorProps {
 export function QueryEditor({ connectionId }: QueryEditorProps) {
   const { sql, isExecuting, setSql, setExecuting } = useQueryStore();
   const { connections } = useConnectionStore();
+  const editorRef = useRef<monacoEditor.IStandaloneCodeEditor | null>(null);
 
   const activeConnection = connections.find((c) => c.id === connectionId);
 
   const executeQuery = useCallback(() => {
-    if (!sql.trim() || isExecuting) return;
+    if (isExecuting) return;
+
+    // Use selected text if any, otherwise full SQL
+    let sqlToRun = sql;
+    const ed = editorRef.current;
+    if (ed) {
+      const selection = ed.getSelection();
+      if (selection && !selection.isEmpty()) {
+        const model = ed.getModel();
+        if (model) {
+          sqlToRun = model.getValueInRange(selection);
+        }
+      }
+    }
+
+    if (!sqlToRun.trim()) return;
     const queryId = `q-${Date.now()}`;
     setExecuting(true, queryId);
-    postMessage({ type: 'executeQuery', connectionId, sql });
+    postMessage({ type: 'executeQuery', connectionId, sql: sqlToRun });
   }, [sql, isExecuting, connectionId, setExecuting]);
 
   const handleMount: OnMount = useCallback(
     (editor, monaco) => {
-      // Ctrl+Enter / Cmd+Enter で実行
+      editorRef.current = editor;
+      // Ctrl+Enter / Cmd+Enter to execute (selected text or all)
       editor.addCommand(
         monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter,
         () => {
@@ -58,7 +76,7 @@ export function QueryEditor({ connectionId }: QueryEditorProps) {
         <button
           onClick={executeQuery}
           disabled={isExecuting || !sql.trim()}
-          title="Execute query (Ctrl+Enter)"
+          title="Execute query (Ctrl+Enter) — runs selected text if any"
           style={{ opacity: isExecuting || !sql.trim() ? 0.5 : 1 }}
         >
           {isExecuting ? 'Running...' : 'Run'}

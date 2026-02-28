@@ -136,6 +136,7 @@ export interface PanelMeta {
   database?: string;
   editId?: string;
   redisDb?: number;
+  initialSql?: string;
 }
 
 export interface ExportOptions {

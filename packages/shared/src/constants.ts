@@ -20,6 +20,7 @@ export const COMMAND_IDS = {
   REFRESH: 'dbmanager.refresh',
   DROP_TABLE: 'dbmanager.dropTable',
   VIEW_REDIS_DATA: 'dbmanager.viewRedisData',
+  OPEN_SQL_FILE: 'dbmanager.openSqlFile',
 } as const;
 
 export const DEFAULT_PORTS: Record<string, number> = {

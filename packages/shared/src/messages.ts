@@ -46,7 +46,9 @@ export type WebviewMessage =
   | { type: 'redisSelectDb'; connectionId: string; db: number }
   | { type: 'redisAddKey'; connectionId: string; key: string; keyType: string; value: string; ttl?: number }
   | { type: 'browseFile'; target: 'sqlite' | 'sshKey' }
-  | { type: 'exportQueryResults'; format: 'csv' | 'json' | 'xml'; content: string; defaultFileName: string };
+  | { type: 'exportQueryResults'; format: 'csv' | 'json' | 'xml'; content: string; defaultFileName: string }
+  | { type: 'getSchemas'; connectionId: string; database?: string }
+  | { type: 'switchQueryContext'; connectionId: string; database?: string; schema?: string };
 
 // Extension → Webview
 export type ExtensionMessage =
@@ -87,6 +89,8 @@ export type ExtensionMessage =
     }
   | { type: 'redisValue'; connectionId: string; value: RedisValue }
   | { type: 'filePicked'; target: 'sqlite' | 'sshKey'; path: string }
+  | { type: 'databaseList'; connectionId: string; databases: string[] }
+  | { type: 'schemaList'; connectionId: string; schemas: string[] }
   | { type: 'error'; message: string };
 
 // Re-export used types to avoid unused import warnings
