@@ -68,3 +68,117 @@ select:focus {
   --ag-selected-row-background-color: var(--vscode-list-activeSelectionBackground);
   --ag-border-color: var(--vscode-panel-border, #333);
 }
+
+/* Textarea (Redis ValueViewer, etc.) */
+textarea {
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border, transparent);
+  font-family: var(--vscode-editor-font-family, 'Consolas', 'Courier New', monospace);
+  font-size: var(--vscode-editor-font-size, 13px);
+  border-radius: 2px;
+  outline: none;
+  resize: vertical;
+}
+
+textarea:focus {
+  border-color: var(--vscode-focusBorder);
+}
+
+/* Table Editor — dirty / deleted / inserted row styles */
+.ag-theme-alpine .ag-row.row-dirty,
+.ag-theme-alpine-dark .ag-row.row-dirty {
+  background-color: rgba(255, 213, 79, 0.08);
+}
+
+.ag-theme-alpine .ag-row.row-deleted,
+.ag-theme-alpine-dark .ag-row.row-deleted {
+  background-color: rgba(244, 67, 54, 0.08);
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+.ag-theme-alpine .ag-row.row-inserted,
+.ag-theme-alpine-dark .ag-row.row-inserted {
+  background-color: rgba(76, 175, 80, 0.08);
+}
+
+/* Pagination controls */
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Redis KeyTree */
+.key-tree-node {
+  display: flex;
+  align-items: center;
+  padding: 2px 0;
+  cursor: pointer;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.key-tree-node:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.key-tree-node.selected {
+  background: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground);
+}
+
+/* Redis type badges */
+.redis-type-badge {
+  display: inline-block;
+  padding: 0 4px;
+  border-radius: 2px;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+}
+
+/* Export progress bar */
+.export-progress-bar {
+  height: 4px;
+  background: var(--vscode-progressBar-background, #0078d4);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+/* Status bar */
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 2px 12px;
+  font-size: 11px;
+  border-top: 1px solid var(--vscode-panel-border, #333);
+  background: var(--vscode-statusBar-background, transparent);
+  color: var(--vscode-statusBar-foreground, inherit);
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--vscode-scrollbarSlider-background, rgba(121, 121, 121, 0.4));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--vscode-scrollbarSlider-hoverBackground, rgba(100, 100, 100, 0.7));
+}

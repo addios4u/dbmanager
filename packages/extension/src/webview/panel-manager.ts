@@ -1,6 +1,11 @@
 import * as vscode from 'vscode';
-import type { WebviewMessage, ExtensionMessage, ConnectionConfig } from '@dbmanager/shared';
+import { open as fsOpen } from 'fs/promises';
+import type { FileHandle } from 'fs/promises';
+import * as path from 'path';
+import type { WebviewMessage, ExtensionMessage, ConnectionConfig, PanelMeta, TableEdit, ExportOptions } from '@dbmanager/shared';
+import { PAGE_SIZE } from '@dbmanager/shared';
 import type { ConnectionManager } from '../services/connection-manager.js';
+import type { DatabaseAdapter, RedisAdapter } from '../adapters/base.js';
 import { testConnection, testSshTunnel } from '../services/connection-tester.js';
 
 /** DB 드라이버 에러에서 유용한 메시지를 추출한다. */
@@ -36,14 +41,13 @@ function formatError(err: unknown): string {
   return parts.join(' ') || 'Unknown error';
 }
 
-type PanelKind = 'query' | 'tableData' | 'tableEditor' | 'connectionDialog' | 'ddl' | 'export';
-
-interface PanelMeta {
-  kind: PanelKind;
-  connectionId?: string;
-  tableName?: string;
-  schema?: string;
-  editId?: string;
+/** Quote an identifier for the given DB type. */
+function quoteIdentifier(name: string, dbType: string): string {
+  if (dbType === 'mysql' || dbType === 'mariadb') {
+    return '`' + name.replace(/`/g, '``') + '`';
+  }
+  // postgresql, sqlite
+  return '"' + name.replace(/"/g, '""') + '"';
 }
 
 export class WebviewPanelManager {
@@ -61,14 +65,14 @@ export class WebviewPanelManager {
     this.showOrCreate(key, `Query — ${this.getConnectionLabel(connectionId)}`, { kind: 'query', connectionId });
   }
 
-  openTableData(connectionId: string, tableName: string, schema?: string): void {
-    const key = `tableData:${connectionId}:${schema ?? ''}:${tableName}`;
-    this.showOrCreate(key, `${tableName} — Data`, { kind: 'tableData', connectionId, tableName, schema });
+  openTableData(connectionId: string, tableName: string, schema?: string, database?: string): void {
+    const key = `tableData:${connectionId}:${database ?? ''}:${schema ?? ''}:${tableName}`;
+    this.showOrCreate(key, `${tableName} — Data`, { kind: 'tableData', connectionId, tableName, schema, database });
   }
 
-  openTableEditor(connectionId: string, tableName: string, schema?: string): void {
-    const key = `tableEditor:${connectionId}:${schema ?? ''}:${tableName}`;
-    this.showOrCreate(key, `${tableName} — Edit`, { kind: 'tableEditor', connectionId, tableName, schema });
+  openTableEditor(connectionId: string, tableName: string, schema?: string, database?: string): void {
+    const key = `tableEditor:${connectionId}:${database ?? ''}:${schema ?? ''}:${tableName}`;
+    this.showOrCreate(key, `${tableName} — Edit`, { kind: 'tableEditor', connectionId, tableName, schema, database });
   }
 
   openConnectionDialog(editId?: string): void {
@@ -77,14 +81,21 @@ export class WebviewPanelManager {
     this.showOrCreate(key, title, { kind: 'connectionDialog', editId });
   }
 
-  showDDL(connectionId: string, tableName: string, schema?: string): void {
-    const key = `ddl:${connectionId}:${schema ?? ''}:${tableName}`;
-    this.showOrCreate(key, `${tableName} — DDL`, { kind: 'ddl', connectionId, tableName, schema });
+  showDDL(connectionId: string, tableName: string, schema?: string, database?: string): void {
+    const key = `ddl:${connectionId}:${database ?? ''}:${schema ?? ''}:${tableName}`;
+    this.showOrCreate(key, `${tableName} — DDL`, { kind: 'ddl', connectionId, tableName, schema, database });
   }
 
-  exportTable(connectionId: string, tableName: string): void {
-    const key = `export:${connectionId}:${tableName}`;
-    this.showOrCreate(key, `${tableName} — Export`, { kind: 'export', connectionId, tableName });
+  exportTable(connectionId: string, tableName: string, schema?: string, database?: string): void {
+    const key = `export:${connectionId}:${database ?? ''}:${schema ?? ''}:${tableName}`;
+    this.showOrCreate(key, `${tableName} — Export`, { kind: 'export', connectionId, tableName, schema, database });
+  }
+
+  openRedisBrowser(connectionId: string, db?: number): void {
+    const key = `redis:${connectionId}:${db ?? 0}`;
+    const label = this.getConnectionLabel(connectionId);
+    const title = db !== undefined ? `${label} — DB ${db}` : `${label} — Redis`;
+    this.showOrCreate(key, title, { kind: 'redis', connectionId, redisDb: db });
   }
 
   private getConnectionLabel(connectionId: string): string {
@@ -139,17 +150,31 @@ export class WebviewPanelManager {
           activeConnectionId: meta.connectionId,
         };
         void panel.webview.postMessage(syncMsg);
+
+        // Auto-load content based on panel kind
+        if (meta.kind === 'tableData' || meta.kind === 'tableEditor') {
+          if (meta.connectionId && meta.tableName) {
+            void this.handleGetTableData(panel, meta.connectionId, meta.tableName, meta.schema, 0, PAGE_SIZE);
+          }
+        } else if (meta.kind === 'ddl') {
+          if (meta.connectionId && meta.tableName) {
+            void this.handleGetTableDDL(panel, meta.connectionId, meta.tableName, meta.schema);
+          }
+        } else if (meta.kind === 'redis') {
+          if (meta.connectionId) {
+            void this.handleRedisScan(panel, meta.connectionId, '*', '0', 200, meta.redisDb);
+          }
+        }
         break;
       }
 
       case 'executeQuery': {
-        // TODO: delegate to QueryExecutor service
-        const errMsg: ExtensionMessage = {
-          type: 'queryError',
-          queryId: msg.sql,
-          error: 'Query executor not yet implemented',
-        };
-        void panel.webview.postMessage(errMsg);
+        void this.handleExecuteQuery(panel, msg.connectionId, msg.sql);
+        break;
+      }
+
+      case 'cancelQuery': {
+        void this.handleCancelQuery(msg.queryId, meta.connectionId);
         break;
       }
 
@@ -184,47 +209,77 @@ export class WebviewPanelManager {
       }
 
       case 'getTableData': {
-        // TODO: delegate to adapter
-        const errMsg: ExtensionMessage = {
-          type: 'error',
-          message: 'getTableData not yet implemented',
-        };
-        void panel.webview.postMessage(errMsg);
+        void this.handleGetTableData(
+          panel,
+          msg.connectionId,
+          msg.table,
+          msg.schema,
+          msg.offset ?? 0,
+          msg.limit ?? PAGE_SIZE,
+          msg.sortColumn,
+          msg.sortDirection,
+          msg.where,
+        );
+        break;
+      }
+
+      case 'fetchPage': {
+        // Re-use table meta from the panel
+        if (meta.connectionId && meta.tableName) {
+          void this.handleGetTableData(
+            panel,
+            meta.connectionId,
+            meta.tableName,
+            meta.schema,
+            msg.offset,
+            msg.limit,
+          );
+        }
         break;
       }
 
       case 'getTableDDL': {
-        // TODO: delegate to adapter
-        const errMsg: ExtensionMessage = {
-          type: 'error',
-          message: 'getTableDDL not yet implemented',
-        };
-        void panel.webview.postMessage(errMsg);
+        void this.handleGetTableDDL(panel, msg.connectionId, msg.table, msg.schema);
+        break;
+      }
+
+      case 'saveTableEdits': {
+        void this.handleSaveTableEdits(panel, msg.connectionId, msg.edits);
         break;
       }
 
       case 'exportData': {
-        // TODO: implement export
+        void this.handleExportData(panel, msg.connectionId, msg.table, msg.schema, msg.format, msg.options);
         break;
       }
 
       case 'redisScan': {
-        // TODO: delegate to Redis adapter
+        void this.handleRedisScan(panel, msg.connectionId, msg.pattern, msg.cursor, msg.count ?? 200, msg.db);
         break;
       }
 
       case 'redisGet': {
-        // TODO: delegate to Redis adapter
+        void this.handleRedisGet(panel, msg.connectionId, msg.key);
         break;
       }
 
       case 'redisSet': {
-        // TODO: delegate to Redis adapter
+        void this.handleRedisSet(panel, msg.connectionId, msg.key, msg.value, msg.ttl);
         break;
       }
 
       case 'redisDel': {
-        // TODO: delegate to Redis adapter
+        void this.handleRedisDel(panel, msg.connectionId, msg.keys);
+        break;
+      }
+
+      case 'redisSelectDb': {
+        void this.handleRedisSelectDb(panel, msg.connectionId, msg.db);
+        break;
+      }
+
+      case 'redisAddKey': {
+        void this.handleRedisSet(panel, msg.connectionId, msg.key, msg.value, msg.ttl);
         break;
       }
 
@@ -237,6 +292,526 @@ export class WebviewPanelManager {
         break;
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // Query handlers
+  // ---------------------------------------------------------------------------
+
+  private async handleExecuteQuery(
+    panel: vscode.WebviewPanel,
+    connectionId: string,
+    sql: string,
+  ): Promise<void> {
+    const adapter = this.connectionManager.getAdapter(connectionId);
+    if (!adapter || !('execute' in adapter)) {
+      const errMsg: ExtensionMessage = {
+        type: 'queryError',
+        queryId: sql,
+        error: 'No active database connection',
+      };
+      void panel.webview.postMessage(errMsg);
+      return;
+    }
+    const dbAdapter = adapter as DatabaseAdapter;
+    try {
+      const result = await dbAdapter.execute(sql);
+      const resultMsg: ExtensionMessage = {
+        type: 'queryResult',
+        queryId: result.queryId,
+        columns: result.columns,
+        rows: result.rows,
+        totalRows: result.rows.length,
+        executionTime: result.executionTime,
+      };
+      void panel.webview.postMessage(resultMsg);
+    } catch (err) {
+      const errMsg: ExtensionMessage = {
+        type: 'queryError',
+        queryId: sql,
+        error: formatError(err),
+      };
+      void panel.webview.postMessage(errMsg);
+    }
+  }
+
+  private async handleCancelQuery(queryId: string, connectionId?: string): Promise<void> {
+    if (!connectionId) return;
+    const adapter = this.connectionManager.getAdapter(connectionId);
+    if (adapter && 'cancel' in adapter) {
+      try {
+        await (adapter as DatabaseAdapter).cancel(queryId);
+      } catch {
+        // ignore cancel errors
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Table data handlers
+  // ---------------------------------------------------------------------------
+
+  private async handleGetTableData(
+    panel: vscode.WebviewPanel,
+    connectionId: string,
+    table: string,
+    schema: string | undefined,
+    offset: number,
+    limit: number,
+    sortColumn?: string,
+    sortDirection?: 'asc' | 'desc',
+    where?: string,
+  ): Promise<void> {
+    const adapter = this.connectionManager.getAdapter(connectionId);
+    if (!adapter || !('execute' in adapter)) {
+      const errMsg: ExtensionMessage = { type: 'error', message: 'No active database connection' };
+      void panel.webview.postMessage(errMsg);
+      return;
+    }
+    const dbAdapter = adapter as DatabaseAdapter;
+    const config = this.connectionManager.getConnection(connectionId);
+    if (!config) {
+      const errMsg: ExtensionMessage = { type: 'error', message: 'Connection config not found' };
+      void panel.webview.postMessage(errMsg);
+      return;
+    }
+
+    const dbType = config.type;
+    const isPostgres = dbType === 'postgresql';
+
+    // Build qualified table name
+    const qualTable = schema
+      ? `${quoteIdentifier(schema, dbType)}.${quoteIdentifier(table, dbType)}`
+      : quoteIdentifier(table, dbType);
+
+    // WHERE clause (user-provided condition)
+    const whereClause = where?.trim() ? ` WHERE ${where.trim()}` : '';
+
+    // ORDER BY clause
+    let orderClause = '';
+    if (sortColumn) {
+      const dir = sortDirection === 'desc' ? 'DESC' : 'ASC';
+      orderClause = ` ORDER BY ${quoteIdentifier(sortColumn, dbType)} ${dir}`;
+    }
+
+    try {
+      let countSql: string;
+      let dataSql: string;
+      let dataParams: unknown[];
+
+      if (isPostgres) {
+        countSql = `SELECT COUNT(*) AS cnt FROM ${qualTable}${whereClause}`;
+        dataSql = `SELECT * FROM ${qualTable}${whereClause}${orderClause} LIMIT $1 OFFSET $2`;
+        dataParams = [limit, offset];
+      } else {
+        countSql = `SELECT COUNT(*) AS cnt FROM ${qualTable}${whereClause}`;
+        dataSql = `SELECT * FROM ${qualTable}${whereClause}${orderClause} LIMIT ? OFFSET ?`;
+        dataParams = [limit, offset];
+      }
+
+      const [countResult, dataResult, primaryKeys] = await Promise.all([
+        dbAdapter.execute(countSql),
+        dbAdapter.execute(dataSql, dataParams),
+        dbAdapter.getPrimaryKey(table, schema),
+      ]);
+
+      // Extract total count — different drivers return it differently
+      const firstRow = countResult.rows[0];
+      let totalRows = 0;
+      if (firstRow) {
+        const val = firstRow['cnt'] ?? firstRow['count(*)'] ?? firstRow['COUNT(*)'] ?? firstRow['count'];
+        totalRows = typeof val === 'number' ? val : parseInt(String(val), 10) || 0;
+      }
+
+      const tableDataMsg: ExtensionMessage = {
+        type: 'tableData',
+        connectionId,
+        table,
+        columns: dataResult.columns,
+        rows: dataResult.rows,
+        totalRows,
+        offset,
+        primaryKeys,
+      };
+      void panel.webview.postMessage(tableDataMsg);
+    } catch (err) {
+      const errMsg: ExtensionMessage = { type: 'error', message: formatError(err) };
+      void panel.webview.postMessage(errMsg);
+    }
+  }
+
+  private async handleGetTableDDL(
+    panel: vscode.WebviewPanel,
+    connectionId: string,
+    table: string,
+    schema?: string,
+  ): Promise<void> {
+    const adapter = this.connectionManager.getAdapter(connectionId);
+    if (!adapter || !('getTableDDL' in adapter)) {
+      const errMsg: ExtensionMessage = { type: 'error', message: 'No active database connection' };
+      void panel.webview.postMessage(errMsg);
+      return;
+    }
+    try {
+      const ddl = await (adapter as DatabaseAdapter).getTableDDL(table, schema);
+      const ddlMsg: ExtensionMessage = { type: 'tableDDL', connectionId, table, ddl };
+      void panel.webview.postMessage(ddlMsg);
+    } catch (err) {
+      const errMsg: ExtensionMessage = { type: 'error', message: formatError(err) };
+      void panel.webview.postMessage(errMsg);
+    }
+  }
+
+  private async handleSaveTableEdits(
+    panel: vscode.WebviewPanel,
+    connectionId: string,
+    edits: TableEdit[],
+  ): Promise<void> {
+    const adapter = this.connectionManager.getAdapter(connectionId);
+    if (!adapter || !('execute' in adapter)) {
+      const errMsg: ExtensionMessage = { type: 'editResult', success: false, error: 'No active database connection' };
+      void panel.webview.postMessage(errMsg);
+      return;
+    }
+    const dbAdapter = adapter as DatabaseAdapter;
+    const config = this.connectionManager.getConnection(connectionId);
+    if (!config) {
+      const errMsg: ExtensionMessage = { type: 'editResult', success: false, error: 'Connection config not found' };
+      void panel.webview.postMessage(errMsg);
+      return;
+    }
+
+    const dbType = config.type;
+    const isPostgres = dbType === 'postgresql';
+
+    try {
+      for (const edit of edits) {
+        const qualTable = quoteIdentifier(edit.table, dbType);
+
+        if (edit.type === 'insert') {
+          const cols = Object.keys(edit.changes);
+          const vals = Object.values(edit.changes);
+          const colList = cols.map((c) => quoteIdentifier(c, dbType)).join(', ');
+          let placeholders: string;
+          if (isPostgres) {
+            placeholders = cols.map((_, i) => `$${i + 1}`).join(', ');
+          } else {
+            placeholders = cols.map(() => '?').join(', ');
+          }
+          const sql = `INSERT INTO ${qualTable} (${colList}) VALUES (${placeholders})`;
+          await dbAdapter.execute(sql, vals);
+        } else if (edit.type === 'update') {
+          const setCols = Object.keys(edit.changes);
+          const setVals = Object.values(edit.changes);
+          const pkCols = Object.keys(edit.primaryKey);
+          const pkVals = Object.values(edit.primaryKey);
+          let paramIdx = 1;
+          let setClause: string;
+          let whereClause: string;
+          if (isPostgres) {
+            setClause = setCols.map((c) => `${quoteIdentifier(c, dbType)} = $${paramIdx++}`).join(', ');
+            whereClause = pkCols.map((c) => `${quoteIdentifier(c, dbType)} = $${paramIdx++}`).join(' AND ');
+          } else {
+            setClause = setCols.map((c) => `${quoteIdentifier(c, dbType)} = ?`).join(', ');
+            whereClause = pkCols.map((c) => `${quoteIdentifier(c, dbType)} = ?`).join(' AND ');
+          }
+          const sql = `UPDATE ${qualTable} SET ${setClause} WHERE ${whereClause}`;
+          await dbAdapter.execute(sql, [...setVals, ...pkVals]);
+        } else if (edit.type === 'delete') {
+          const pkCols = Object.keys(edit.primaryKey);
+          const pkVals = Object.values(edit.primaryKey);
+          let whereClause: string;
+          if (isPostgres) {
+            whereClause = pkCols.map((c, i) => `${quoteIdentifier(c, dbType)} = $${i + 1}`).join(' AND ');
+          } else {
+            whereClause = pkCols.map((c) => `${quoteIdentifier(c, dbType)} = ?`).join(' AND ');
+          }
+          const sql = `DELETE FROM ${qualTable} WHERE ${whereClause}`;
+          await dbAdapter.execute(sql, pkVals);
+        }
+      }
+      const resultMsg: ExtensionMessage = { type: 'editResult', success: true };
+      void panel.webview.postMessage(resultMsg);
+    } catch (err) {
+      const errMsg: ExtensionMessage = { type: 'editResult', success: false, error: formatError(err) };
+      void panel.webview.postMessage(errMsg);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Export handler
+  // ---------------------------------------------------------------------------
+
+  private async handleExportData(
+    panel: vscode.WebviewPanel,
+    connectionId: string,
+    table: string,
+    schema: string | undefined,
+    format: 'csv' | 'json' | 'sql',
+    options?: ExportOptions,
+  ): Promise<void> {
+    const adapter = this.connectionManager.getAdapter(connectionId);
+    if (!adapter || !('execute' in adapter)) {
+      const errMsg: ExtensionMessage = { type: 'exportError', error: 'No active database connection' };
+      void panel.webview.postMessage(errMsg);
+      return;
+    }
+    const dbAdapter = adapter as DatabaseAdapter;
+    const config = this.connectionManager.getConnection(connectionId);
+    if (!config) {
+      const errMsg: ExtensionMessage = { type: 'exportError', error: 'Connection config not found' };
+      void panel.webview.postMessage(errMsg);
+      return;
+    }
+
+    const filterMap: Record<string, { [label: string]: string[] }> = {
+      csv: { 'CSV Files': ['csv'] },
+      json: { 'JSON Files': ['json'] },
+      sql: { 'SQL Files': ['sql'] },
+    };
+
+    const saveUri = await vscode.window.showSaveDialog({
+      defaultUri: vscode.Uri.file(path.join(require('os').homedir(), `${table}.${format}`)),
+      filters: filterMap[format] ?? {},
+      title: `Export ${table} as ${format.toUpperCase()}`,
+    });
+
+    if (!saveUri) {
+      // User cancelled
+      return;
+    }
+
+    const dbType = config.type;
+    const isPostgres = dbType === 'postgresql';
+    const qualTable = schema
+      ? `${quoteIdentifier(schema, dbType)}.${quoteIdentifier(table, dbType)}`
+      : quoteIdentifier(table, dbType);
+
+    try {
+      // Get total row count
+      const countResult = await dbAdapter.execute(`SELECT COUNT(*) AS cnt FROM ${qualTable}`);
+      const firstRow = countResult.rows[0];
+      let totalRows = 0;
+      if (firstRow) {
+        const val = firstRow['cnt'] ?? firstRow['count(*)'] ?? firstRow['COUNT(*)'] ?? firstRow['count'];
+        totalRows = typeof val === 'number' ? val : parseInt(String(val), 10) || 0;
+      }
+
+      const delimiter = options?.delimiter ?? ',';
+      const includeHeaders = options?.includeHeaders !== false;
+      const prettyPrint = options?.prettyPrint === true;
+      const includeDropStatement = options?.includeDropStatement === true;
+
+      let fileHandle: FileHandle | undefined;
+      try {
+        fileHandle = await fsOpen(saveUri.fsPath, 'w');
+
+        let headers: string[] | undefined;
+        const allRows: Record<string, unknown>[] = [];
+
+        let offset = 0;
+        while (offset < totalRows || (offset === 0 && totalRows === 0)) {
+          let dataSql: string;
+          let dataParams: unknown[];
+          if (isPostgres) {
+            dataSql = `SELECT * FROM ${qualTable} LIMIT $1 OFFSET $2`;
+            dataParams = [PAGE_SIZE, offset];
+          } else {
+            dataSql = `SELECT * FROM ${qualTable} LIMIT ? OFFSET ?`;
+            dataParams = [PAGE_SIZE, offset];
+          }
+
+          const dataResult = await dbAdapter.execute(dataSql, dataParams);
+
+          if (!headers && dataResult.columns.length > 0) {
+            headers = dataResult.columns.map((c) => c.name);
+          }
+
+          if (format === 'json') {
+            allRows.push(...dataResult.rows);
+          } else if (format === 'csv') {
+            if (offset === 0 && includeHeaders && headers) {
+              const headerLine = headers.map((h) => csvEscape(h, delimiter)).join(delimiter) + '\n';
+              await fileHandle.write(headerLine);
+            }
+            for (const row of dataResult.rows) {
+              const line = (headers ?? []).map((h) => csvEscape(String(row[h] ?? ''), delimiter)).join(delimiter) + '\n';
+              await fileHandle.write(line);
+            }
+          } else if (format === 'sql') {
+            if (offset === 0 && includeDropStatement) {
+              await fileHandle.write(`DROP TABLE IF EXISTS ${qualTable};\n\n`);
+            }
+            for (const row of dataResult.rows) {
+              const cols = (headers ?? []).map((h) => quoteIdentifier(h, dbType)).join(', ');
+              const vals = (headers ?? []).map((h) => sqlValue(row[h])).join(', ');
+              await fileHandle.write(`INSERT INTO ${qualTable} (${cols}) VALUES (${vals});\n`);
+            }
+          }
+
+          const percent = Math.min(100, Math.round(((offset + dataResult.rows.length) / Math.max(totalRows, 1)) * 100));
+          const progressMsg: ExtensionMessage = {
+            type: 'exportProgress',
+            percent,
+            message: `Exported ${offset + dataResult.rows.length} / ${totalRows} rows`,
+          };
+          void panel.webview.postMessage(progressMsg);
+
+          if (dataResult.rows.length < PAGE_SIZE) break;
+          offset += PAGE_SIZE;
+        }
+
+        // Write JSON in one shot after collecting all rows
+        if (format === 'json' && fileHandle) {
+          const jsonStr = prettyPrint ? JSON.stringify(allRows, null, 2) : JSON.stringify(allRows);
+          await fileHandle.write(jsonStr);
+        }
+      } finally {
+        await fileHandle?.close();
+      }
+
+      const completeMsg: ExtensionMessage = { type: 'exportComplete', filePath: saveUri.fsPath };
+      void panel.webview.postMessage(completeMsg);
+    } catch (err) {
+      const errMsg: ExtensionMessage = { type: 'exportError', error: formatError(err) };
+      void panel.webview.postMessage(errMsg);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Redis handlers
+  // ---------------------------------------------------------------------------
+
+  private async handleRedisScan(
+    panel: vscode.WebviewPanel,
+    connectionId: string,
+    pattern: string,
+    cursor: string,
+    count: number,
+    db?: number,
+  ): Promise<void> {
+    const adapter = this.connectionManager.getAdapter(connectionId);
+    if (!adapter || !('scan' in adapter)) {
+      const errMsg: ExtensionMessage = { type: 'error', message: 'No active Redis connection' };
+      void panel.webview.postMessage(errMsg);
+      return;
+    }
+    const redisAdapter = adapter as RedisAdapter;
+    try {
+      const scanResult = await redisAdapter.scan(pattern, cursor, count);
+
+      // Fetch type and ttl for each key in parallel (batched)
+      const keyInfos = await Promise.all(
+        scanResult.keys.map(async (key) => {
+          const [type, ttl] = await Promise.all([
+            redisAdapter.type(key),
+            redisAdapter.ttl(key),
+          ]);
+          return { key, type, ttl };
+        }),
+      );
+
+      const keysMsg: ExtensionMessage = {
+        type: 'redisKeys',
+        connectionId,
+        keys: keyInfos,
+        cursor: scanResult.cursor,
+        hasMore: scanResult.hasMore,
+      };
+      void panel.webview.postMessage(keysMsg);
+    } catch (err) {
+      const errMsg: ExtensionMessage = { type: 'error', message: formatError(err) };
+      void panel.webview.postMessage(errMsg);
+    }
+  }
+
+  private async handleRedisGet(
+    panel: vscode.WebviewPanel,
+    connectionId: string,
+    key: string,
+  ): Promise<void> {
+    const adapter = this.connectionManager.getAdapter(connectionId);
+    if (!adapter || !('get' in adapter)) {
+      const errMsg: ExtensionMessage = { type: 'error', message: 'No active Redis connection' };
+      void panel.webview.postMessage(errMsg);
+      return;
+    }
+    try {
+      const value = await (adapter as RedisAdapter).get(key);
+      const valueMsg: ExtensionMessage = { type: 'redisValue', connectionId, value };
+      void panel.webview.postMessage(valueMsg);
+    } catch (err) {
+      const errMsg: ExtensionMessage = { type: 'error', message: formatError(err) };
+      void panel.webview.postMessage(errMsg);
+    }
+  }
+
+  private async handleRedisSet(
+    panel: vscode.WebviewPanel,
+    connectionId: string,
+    key: string,
+    value: string,
+    ttl?: number,
+  ): Promise<void> {
+    const adapter = this.connectionManager.getAdapter(connectionId);
+    if (!adapter || !('set' in adapter)) {
+      const errMsg: ExtensionMessage = { type: 'error', message: 'No active Redis connection' };
+      void panel.webview.postMessage(errMsg);
+      return;
+    }
+    try {
+      await (adapter as RedisAdapter).set(key, value, ttl);
+      // Re-scan after set to refresh keys view
+      void this.handleRedisScan(panel, connectionId, '*', '0', 200);
+    } catch (err) {
+      const errMsg: ExtensionMessage = { type: 'error', message: formatError(err) };
+      void panel.webview.postMessage(errMsg);
+    }
+  }
+
+  private async handleRedisDel(
+    panel: vscode.WebviewPanel,
+    connectionId: string,
+    keys: string[],
+  ): Promise<void> {
+    const adapter = this.connectionManager.getAdapter(connectionId);
+    if (!adapter || !('del' in adapter)) {
+      const errMsg: ExtensionMessage = { type: 'error', message: 'No active Redis connection' };
+      void panel.webview.postMessage(errMsg);
+      return;
+    }
+    try {
+      await (adapter as RedisAdapter).del(keys);
+      // Re-scan after deletion to refresh keys view
+      void this.handleRedisScan(panel, connectionId, '*', '0', 200);
+    } catch (err) {
+      const errMsg: ExtensionMessage = { type: 'error', message: formatError(err) };
+      void panel.webview.postMessage(errMsg);
+    }
+  }
+
+  private async handleRedisSelectDb(
+    panel: vscode.WebviewPanel,
+    connectionId: string,
+    db: number,
+  ): Promise<void> {
+    const adapter = this.connectionManager.getAdapter(connectionId);
+    if (!adapter || !('selectDb' in adapter)) {
+      const errMsg: ExtensionMessage = { type: 'error', message: 'No active Redis connection' };
+      void panel.webview.postMessage(errMsg);
+      return;
+    }
+    try {
+      await (adapter as RedisAdapter).selectDb(db);
+      void this.handleRedisScan(panel, connectionId, '*', '0', 200, db);
+    } catch (err) {
+      const errMsg: ExtensionMessage = { type: 'error', message: formatError(err) };
+      void panel.webview.postMessage(errMsg);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Connection test / save handlers
+  // ---------------------------------------------------------------------------
 
   private async handleTestConnection(
     panel: vscode.WebviewPanel,
@@ -361,11 +936,21 @@ export class WebviewPanelManager {
       `default-src 'none'`,
       `style-src ${webview.cspSource} 'unsafe-inline'`,
       `script-src 'nonce-${nonce}'`,
-      `font-src ${webview.cspSource}`,
+      `font-src ${webview.cspSource} data:`,
       `img-src ${webview.cspSource} data:`,
     ].join('; ');
 
-    const initialState = JSON.stringify({ meta });
+    const initialState = JSON.stringify({
+      meta: {
+        kind: meta.kind,
+        connectionId: meta.connectionId,
+        tableName: meta.tableName,
+        schema: meta.schema,
+        database: meta.database,
+        editId: meta.editId,
+        redisDb: meta.redisDb,
+      },
+    });
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -412,4 +997,24 @@ export class WebviewPanelManager {
     }
     this.panels.clear();
   }
+}
+
+// ---------------------------------------------------------------------------
+// CSV / SQL helpers (module-level, not exported)
+// ---------------------------------------------------------------------------
+
+function csvEscape(value: string, delimiter: string): string {
+  const needsQuote = value.includes('"') || value.includes(delimiter) || value.includes('\n');
+  if (needsQuote) {
+    return '"' + value.replace(/"/g, '""') + '"';
+  }
+  return value;
+}
+
+function sqlValue(value: unknown): string {
+  if (value === null || value === undefined) return 'NULL';
+  if (typeof value === 'number' || typeof value === 'bigint') return String(value);
+  if (typeof value === 'boolean') return value ? '1' : '0';
+  // Escape single quotes for SQL string literals
+  return "'" + String(value).replace(/'/g, "''") + "'";
 }

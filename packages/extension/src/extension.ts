@@ -44,20 +44,20 @@ export function activate(context: vscode.ExtensionContext): void {
       panelManager.openQueryEditor((node as { connectionId: string }).connectionId);
     }),
     vscode.commands.registerCommand(COMMAND_IDS.VIEW_TABLE_DATA, (node) => {
-      const n = node as { connectionId: string; tableName: string; schema?: string };
-      panelManager.openTableData(n.connectionId, n.tableName, n.schema);
+      const n = node as { connectionId: string; tableName: string; schema?: string; database?: string };
+      panelManager.openTableData(n.connectionId, n.tableName, n.schema, n.database);
     }),
     vscode.commands.registerCommand(COMMAND_IDS.EDIT_TABLE_DATA, (node) => {
-      const n = node as { connectionId: string; tableName: string; schema?: string };
-      panelManager.openTableEditor(n.connectionId, n.tableName, n.schema);
+      const n = node as { connectionId: string; tableName: string; schema?: string; database?: string };
+      panelManager.openTableEditor(n.connectionId, n.tableName, n.schema, n.database);
     }),
     vscode.commands.registerCommand(COMMAND_IDS.SHOW_DDL, (node) => {
-      const n = node as { connectionId: string; tableName: string; schema?: string };
-      panelManager.showDDL(n.connectionId, n.tableName, n.schema);
+      const n = node as { connectionId: string; tableName: string; schema?: string; database?: string };
+      panelManager.showDDL(n.connectionId, n.tableName, n.schema, n.database);
     }),
     vscode.commands.registerCommand(COMMAND_IDS.EXPORT_TABLE, (node) => {
-      const n = node as { connectionId: string; tableName: string };
-      panelManager.exportTable(n.connectionId, n.tableName);
+      const n = node as { connectionId: string; tableName: string; schema?: string; database?: string };
+      panelManager.exportTable(n.connectionId, n.tableName, n.schema, n.database);
     }),
     vscode.commands.registerCommand(COMMAND_IDS.EDIT_CONNECTION, (node) => {
       panelManager.openConnectionDialog((node as { connectionId: string }).connectionId);
@@ -85,6 +85,10 @@ export function activate(context: vscode.ExtensionContext): void {
         // TODO: Implement drop table via adapter
         vscode.window.showInformationMessage(`Drop table "${n.tableName}" is not yet implemented.`);
       }
+    }),
+    vscode.commands.registerCommand(COMMAND_IDS.VIEW_REDIS_DATA, (node) => {
+      const n = node as { connectionId: string; redisDb?: number };
+      panelManager.openRedisBrowser(n.connectionId, n.redisDb);
     }),
   );
 }

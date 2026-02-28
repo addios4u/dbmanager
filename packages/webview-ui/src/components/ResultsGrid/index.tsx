@@ -47,6 +47,7 @@ export function ResultsGrid() {
       sortable: true,
       filter: true,
       resizable: true,
+      unSortIcon: true,
     }),
     [],
   );

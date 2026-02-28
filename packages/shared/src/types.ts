@@ -22,6 +22,7 @@ export interface ConnectionConfig {
   group?: string;
   color?: string;
   ssh?: SshConfig;
+  redisDelimiter?: string; // Redis key tree delimiter (default: ':')
 }
 
 export interface QueryResult {
@@ -106,9 +107,12 @@ export interface TableEdit {
 export type ViewState =
   | { view: 'welcome' }
   | { view: 'query'; connectionId: string }
-  | { view: 'tableData'; connectionId: string; table: string; schema?: string }
+  | { view: 'tableData'; connectionId: string; table: string; schema?: string; database?: string }
+  | { view: 'tableEditor'; connectionId: string; table: string; schema?: string; database?: string }
   | { view: 'schemaView'; connectionId: string; table: string; schema?: string }
-  | { view: 'redis'; connectionId: string }
+  | { view: 'ddl'; connectionId: string; table: string; schema?: string }
+  | { view: 'redis'; connectionId: string; db?: number }
+  | { view: 'export'; connectionId: string; table: string; schema?: string }
   | { view: 'connectionDialog'; editId?: string };
 
 export interface ConnectionInfo extends ConnectionConfig {
@@ -121,4 +125,24 @@ export interface ServerInfo {
   charset?: string;
   uptime?: number; // seconds
   extras?: Record<string, string>;
+}
+
+export type PanelKind = 'query' | 'tableData' | 'tableEditor' | 'connectionDialog' | 'ddl' | 'export' | 'redis';
+
+export interface PanelMeta {
+  kind: PanelKind;
+  connectionId?: string;
+  tableName?: string;
+  schema?: string;
+  database?: string;
+  editId?: string;
+  redisDb?: number;
+}
+
+export interface ExportOptions {
+  format: 'csv' | 'json' | 'sql';
+  includeHeaders?: boolean; // CSV
+  prettyPrint?: boolean; // JSON
+  includeDropStatement?: boolean; // SQL
+  delimiter?: string; // CSV delimiter
 }

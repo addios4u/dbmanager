@@ -8,6 +8,7 @@ import type {
   SchemaInfo,
   DatabaseInfo,
   ColumnMeta,
+  ExportOptions,
 } from './types.js';
 
 // Webview → Extension
@@ -32,13 +33,18 @@ export type WebviewMessage =
       schema?: string;
       offset?: number;
       limit?: number;
+      sortColumn?: string;
+      sortDirection?: 'asc' | 'desc';
+      where?: string;
     }
   | { type: 'getTableDDL'; connectionId: string; table: string; schema?: string }
-  | { type: 'exportData'; connectionId: string; table: string; format: 'csv' | 'json' | 'sql' }
-  | { type: 'redisScan'; connectionId: string; pattern: string; cursor: string; count?: number }
+  | { type: 'exportData'; connectionId: string; table: string; schema?: string; format: 'csv' | 'json' | 'sql'; options?: ExportOptions }
+  | { type: 'redisScan'; connectionId: string; pattern: string; cursor: string; count?: number; db?: number }
   | { type: 'redisGet'; connectionId: string; key: string }
   | { type: 'redisSet'; connectionId: string; key: string; value: string; ttl?: number }
   | { type: 'redisDel'; connectionId: string; keys: string[] }
+  | { type: 'redisSelectDb'; connectionId: string; db: number }
+  | { type: 'redisAddKey'; connectionId: string; key: string; keyType: string; value: string; ttl?: number }
   | { type: 'browseFile'; target: 'sqlite' | 'sshKey' };
 
 // Extension → Webview
@@ -63,11 +69,14 @@ export type ExtensionMessage =
       columns: ColumnMeta[];
       rows: Record<string, unknown>[];
       totalRows: number;
+      offset: number;
+      primaryKeys: string[];
     }
   | { type: 'tableDDL'; connectionId: string; table: string; ddl: string }
   | { type: 'editResult'; success: boolean; error?: string }
   | { type: 'exportComplete'; filePath: string }
   | { type: 'exportError'; error: string }
+  | { type: 'exportProgress'; percent: number; message: string }
   | {
       type: 'redisKeys';
       connectionId: string;
@@ -80,4 +89,4 @@ export type ExtensionMessage =
   | { type: 'error'; message: string };
 
 // Re-export used types to avoid unused import warnings
-export type { ConnectionConfig, ConnectionInfo, QueryResult, TableEdit, RedisKeyInfo, RedisValue, SchemaInfo, DatabaseInfo, ColumnMeta };
+export type { ConnectionConfig, ConnectionInfo, QueryResult, TableEdit, RedisKeyInfo, RedisValue, SchemaInfo, DatabaseInfo, ColumnMeta, ExportOptions };

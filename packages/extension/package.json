@@ -101,6 +101,12 @@
         "command": "dbmanager.dropTable",
         "title": "Drop Table",
         "category": "DB Manager"
+      },
+      {
+        "command": "dbmanager.viewRedisData",
+        "title": "Browse Keys",
+        "icon": "$(database)",
+        "category": "DB Manager"
       }
     ],
     "menus": {
@@ -176,6 +182,16 @@
           "command": "dbmanager.showDDL",
           "when": "view == dbmanager.connections && viewItem == view",
           "group": "1_view@1"
+        },
+        {
+          "command": "dbmanager.viewRedisData",
+          "when": "view == dbmanager.connections && viewItem == redisDb",
+          "group": "inline"
+        },
+        {
+          "command": "dbmanager.viewRedisData",
+          "when": "view == dbmanager.connections && viewItem == redisDb",
+          "group": "1_redis@1"
         },
         {
           "command": "dbmanager.refresh",
