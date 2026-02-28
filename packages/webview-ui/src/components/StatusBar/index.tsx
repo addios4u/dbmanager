@@ -39,18 +39,21 @@ export function StatusBar({ children, executionTime, rowCount, error }: StatusBa
         </span>
       ) : (
         <>
-          {rowCount !== undefined && (
-            <span style={{ opacity: 0.8, whiteSpace: 'nowrap' }}>
-              {rowCount.toLocaleString()} {rowCount === 1 ? 'row' : 'rows'}
-            </span>
-          )}
-          {executionTime !== undefined && (
-            <span style={{ opacity: 0.6, whiteSpace: 'nowrap' }}>
-              {executionTime < 1000
-                ? `${executionTime}ms`
-                : `${(executionTime / 1000).toFixed(2)}s`}
-            </span>
-          )}
+          <span style={{ color: 'var(--vscode-descriptionForeground, #808080)', whiteSpace: 'nowrap' }}>
+            {rowCount !== undefined && (
+              <>
+                {rowCount.toLocaleString()} {rowCount === 1 ? 'row' : 'rows'}
+              </>
+            )}
+            {rowCount !== undefined && executionTime !== undefined && ' \u00b7 '}
+            {executionTime !== undefined && (
+              <>
+                {executionTime < 1000
+                  ? `${executionTime}ms`
+                  : `${(executionTime / 1000).toFixed(2)}s`}
+              </>
+            )}
+          </span>
           {children}
         </>
       )}

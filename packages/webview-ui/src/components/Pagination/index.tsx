@@ -28,16 +28,25 @@ export function Pagination({
   const goToNext = () => onPageChange(Math.min((totalPages - 1) * pageSize, offset + pageSize));
   const goToLast = () => onPageChange((totalPages - 1) * pageSize);
 
+  const navStyle = (disabled: boolean): React.CSSProperties => ({
+    cursor: disabled ? 'default' : 'pointer',
+    color: disabled
+      ? 'var(--vscode-descriptionForeground, #808080)'
+      : 'var(--vscode-button-background, #007ACC)',
+    fontSize: 13,
+    userSelect: 'none',
+  });
+
   return (
     <div
       style={{
         display: 'flex',
         alignItems: 'center',
+        justifyContent: 'space-between',
         height: 28,
-        padding: '0 12px',
+        padding: '4px 16px',
         borderTop: '1px solid var(--vscode-panel-border, #333)',
         flexShrink: 0,
-        gap: 8,
         fontSize: 11,
         opacity: isLoading ? 0.5 : 1,
         pointerEvents: isLoading ? 'none' : undefined,
@@ -45,57 +54,43 @@ export function Pagination({
         color: 'var(--vscode-foreground)',
       }}
     >
-      <span style={{ opacity: 0.8, whiteSpace: 'nowrap' }}>
-        Rows {start}-{end} of {totalRows}
+      <span style={{ color: 'var(--vscode-descriptionForeground, #808080)', whiteSpace: 'nowrap' }}>
+        Rows {start.toLocaleString()}{'\u2013'}{end.toLocaleString()} of {totalRows.toLocaleString()}
       </span>
 
-      <span style={{ opacity: 0.4 }}>|</span>
-
-      <span style={{ opacity: 0.8, whiteSpace: 'nowrap' }}>
-        Page {currentPage} of {totalPages}
-      </span>
-
-      <span style={{ flex: 1 }} />
-
-      <button
-        className="secondary"
-        style={{ fontSize: 11, padding: '1px 8px', height: 20 }}
-        onClick={goToFirst}
-        disabled={isFirst || isLoading}
-        title="First page"
-      >
-        {'«'}
-      </button>
-
-      <button
-        className="secondary"
-        style={{ fontSize: 11, padding: '1px 8px', height: 20 }}
-        onClick={goToPrev}
-        disabled={isFirst || isLoading}
-        title="Previous page"
-      >
-        {'‹'}
-      </button>
-
-      <button
-        className="secondary"
-        style={{ fontSize: 11, padding: '1px 8px', height: 20 }}
-        onClick={goToNext}
-        disabled={isLast || isLoading}
-        title="Next page"
-      >
-        {'›'}
-      </button>
-
-      <button
-        className="secondary"
-        style={{ fontSize: 11, padding: '1px 8px', height: 20 }}
-        onClick={goToLast}
-        disabled={isLast || isLoading}
-        title="Last page"
-      >
-        {'»'}
-      </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <span
+          style={navStyle(isFirst)}
+          onClick={isFirst ? undefined : goToFirst}
+          title="First page"
+        >
+          {'«'}
+        </span>
+        <span
+          style={navStyle(isFirst)}
+          onClick={isFirst ? undefined : goToPrev}
+          title="Previous page"
+        >
+          {'‹'}
+        </span>
+        <span style={{ whiteSpace: 'nowrap' }}>
+          Page {currentPage} of {totalPages}
+        </span>
+        <span
+          style={navStyle(isLast)}
+          onClick={isLast ? undefined : goToNext}
+          title="Next page"
+        >
+          {'›'}
+        </span>
+        <span
+          style={navStyle(isLast)}
+          onClick={isLast ? undefined : goToLast}
+          title="Last page"
+        >
+          {'»'}
+        </span>
+      </div>
     </div>
   );
 }

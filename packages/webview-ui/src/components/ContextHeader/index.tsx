@@ -13,17 +13,17 @@ interface ContextHeaderProps {
 }
 
 const DB_TYPE_COLORS: Record<DatabaseType, string> = {
-  mysql: 'var(--vscode-charts-blue, #2196f3)',
-  mariadb: 'var(--vscode-charts-purple, #9c27b0)',
-  postgresql: 'var(--vscode-charts-green, #009688)',
-  sqlite: 'var(--vscode-charts-yellow, #ff9800)',
-  redis: 'var(--vscode-charts-red, #f44336)',
+  mysql: '#00758F',
+  mariadb: '#6B3FA0',
+  postgresql: '#336791',
+  sqlite: '#ff9800',
+  redis: '#DC382D',
 };
 
 const DB_TYPE_LABELS: Record<DatabaseType, string> = {
   mysql: 'MySQL',
   mariadb: 'MariaDB',
-  postgresql: 'PG',
+  postgresql: 'PostgreSQL',
   sqlite: 'SQLite',
   redis: 'Redis',
 };
@@ -54,11 +54,11 @@ export function ContextHeader({
       style={{
         display: 'flex',
         alignItems: 'center',
-        height: 32,
-        padding: '0 12px',
+        height: 44,
+        padding: '8px 16px',
         borderBottom: '1px solid var(--vscode-panel-border, #333)',
         flexShrink: 0,
-        gap: 6,
+        gap: 12,
         fontSize: 12,
         color: 'var(--vscode-breadcrumb-foreground, var(--vscode-foreground))',
         background: 'var(--vscode-editorGroupHeader-tabsBackground)',
@@ -70,10 +70,11 @@ export function ContextHeader({
           style={{
             display: 'inline-flex',
             alignItems: 'center',
-            padding: '1px 6px',
+            padding: '3px 8px',
             borderRadius: 3,
-            fontSize: 10,
-            fontWeight: 700,
+            fontSize: 11,
+            fontWeight: 500,
+            fontFamily: "'JetBrains Mono', var(--vscode-editor-font-family, monospace)",
             lineHeight: '16px',
             background: DB_TYPE_COLORS[dbType],
             color: '#fff',
@@ -99,15 +100,18 @@ export function ContextHeader({
         {breadcrumbs.map((crumb, i) => (
           <React.Fragment key={i}>
             {i > 0 && (
-              <span style={{ opacity: 0.5, flexShrink: 0 }}>{'>'}</span>
+              <span style={{ color: 'var(--vscode-descriptionForeground, #808080)', flexShrink: 0 }}>{'›'}</span>
             )}
             <span
               style={{
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
-                opacity: i === breadcrumbs.length - 1 ? 1 : 0.7,
+                color: i === breadcrumbs.length - 1
+                  ? 'var(--vscode-foreground)'
+                  : 'var(--vscode-descriptionForeground, #808080)',
                 fontWeight: i === breadcrumbs.length - 1 ? 600 : 400,
+                fontSize: i === breadcrumbs.length - 1 ? 13 : 12,
               }}
             >
               {crumb}
@@ -121,8 +125,9 @@ export function ContextHeader({
       {extraInfo && (
         <span
           style={{
-            opacity: 0.6,
-            fontSize: 11,
+            color: 'var(--vscode-descriptionForeground, #808080)',
+            fontSize: 12,
+            fontFamily: "'JetBrains Mono', var(--vscode-editor-font-family, monospace)",
             marginLeft: 'auto',
             flexShrink: 0,
             whiteSpace: 'nowrap',
