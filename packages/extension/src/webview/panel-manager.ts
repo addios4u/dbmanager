@@ -60,9 +60,9 @@ export class WebviewPanelManager {
     this.connectionManager = connectionManager;
   }
 
-  openQueryEditor(connectionId: string): void {
+  openQueryEditor(connectionId: string, database?: string): void {
     const key = `query:${connectionId}`;
-    this.showOrCreate(key, `Query — ${this.getConnectionLabel(connectionId)}`, { kind: 'query', connectionId });
+    this.showOrCreate(key, `Query — ${this.getConnectionLabel(connectionId)}`, { kind: 'query', connectionId, database });
   }
 
   openTableData(connectionId: string, tableName: string, schema?: string, database?: string): void {
@@ -283,6 +283,11 @@ export class WebviewPanelManager {
         break;
       }
 
+      case 'exportQueryResults': {
+        void this.handleExportQueryResults(panel, msg.format, msg.content, msg.defaultFileName);
+        break;
+      }
+
       default:
         break;
     }
@@ -292,22 +297,44 @@ export class WebviewPanelManager {
   // Query handlers
   // ---------------------------------------------------------------------------
 
+  /** Try to get a connected DatabaseAdapter, auto-reconnecting if needed. */
+  private async ensureConnected(connectionId: string): Promise<DatabaseAdapter | null> {
+    let adapter = this.connectionManager.getAdapter(connectionId);
+    if (adapter && 'execute' in adapter) {
+      return adapter as DatabaseAdapter;
+    }
+
+    // Adapter missing — attempt auto-reconnect
+    const config = this.connectionManager.getConnection(connectionId);
+    if (!config) return null;
+
+    try {
+      await this.connectionManager.connect(connectionId);
+      adapter = this.connectionManager.getAdapter(connectionId);
+      if (adapter && 'execute' in adapter) {
+        return adapter as DatabaseAdapter;
+      }
+    } catch {
+      // reconnect failed
+    }
+    return null;
+  }
+
   private async handleExecuteQuery(
     panel: vscode.WebviewPanel,
     connectionId: string,
     sql: string,
   ): Promise<void> {
-    const adapter = this.connectionManager.getAdapter(connectionId);
-    if (!adapter || !('execute' in adapter)) {
+    const dbAdapter = await this.ensureConnected(connectionId);
+    if (!dbAdapter) {
       const errMsg: ExtensionMessage = {
         type: 'queryError',
         queryId: sql,
-        error: 'No active database connection',
+        error: 'Failed to connect to database. Please check connection settings.',
       };
       void panel.webview.postMessage(errMsg);
       return;
     }
-    const dbAdapter = adapter as DatabaseAdapter;
     try {
       const result = await dbAdapter.execute(sql);
       const resultMsg: ExtensionMessage = {
@@ -673,6 +700,42 @@ export class WebviewPanelManager {
   }
 
   // ---------------------------------------------------------------------------
+  // Query results export handler
+  // ---------------------------------------------------------------------------
+
+  private async handleExportQueryResults(
+    panel: vscode.WebviewPanel,
+    format: 'csv' | 'json' | 'xml',
+    content: string,
+    defaultFileName: string,
+  ): Promise<void> {
+    const filterMap: Record<string, { [label: string]: string[] }> = {
+      csv: { 'CSV Files': ['csv'] },
+      json: { 'JSON Files': ['json'] },
+      xml: { 'XML Files': ['xml'] },
+    };
+
+    const saveUri = await vscode.window.showSaveDialog({
+      defaultUri: vscode.Uri.file(
+        path.join(require('os').homedir(), `${defaultFileName}.${format}`),
+      ),
+      filters: filterMap[format] ?? {},
+      title: `Export Query Results as ${format.toUpperCase()}`,
+    });
+
+    if (!saveUri) return;
+
+    try {
+      await vscode.workspace.fs.writeFile(saveUri, Buffer.from(content, 'utf-8'));
+      const completeMsg: ExtensionMessage = { type: 'exportComplete', filePath: saveUri.fsPath };
+      void panel.webview.postMessage(completeMsg);
+    } catch (err) {
+      const errMsg: ExtensionMessage = { type: 'exportError', error: formatError(err) };
+      void panel.webview.postMessage(errMsg);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Redis handlers
   // ---------------------------------------------------------------------------
 
@@ -930,7 +993,7 @@ export class WebviewPanelManager {
     const csp = [
       `default-src 'none'`,
       `style-src ${webview.cspSource} 'unsafe-inline'`,
-      `script-src 'nonce-${nonce}'`,
+      `script-src 'nonce-${nonce}' ${webview.cspSource}`,
       `font-src ${webview.cspSource} data:`,
       `img-src ${webview.cspSource} data:`,
     ].join('; ');

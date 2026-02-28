@@ -135,8 +135,23 @@
         },
         {
           "command": "dbmanager.newQuery",
-          "when": "view == dbmanager.connections && viewItem == connection-connected",
+          "when": "view == dbmanager.connections && viewItem =~ /^database-(mysql|mariadb|sqlite)$/",
           "group": "inline"
+        },
+        {
+          "command": "dbmanager.newQuery",
+          "when": "view == dbmanager.connections && viewItem =~ /^database-(mysql|mariadb|sqlite)$/",
+          "group": "1_database@0"
+        },
+        {
+          "command": "dbmanager.newQuery",
+          "when": "view == dbmanager.connections && viewItem == schema-postgresql",
+          "group": "inline"
+        },
+        {
+          "command": "dbmanager.newQuery",
+          "when": "view == dbmanager.connections && viewItem == schema-postgresql",
+          "group": "1_schema@0"
         },
         {
           "command": "dbmanager.editConnection",
@@ -175,7 +190,7 @@
         },
         {
           "command": "dbmanager.refresh",
-          "when": "view == dbmanager.connections && viewItem =~ /connection-connected|database|schemaGroup|schema|tableGroup|viewGroup|triggerGroup|extensionGroup|roleGroup|redisDb/",
+          "when": "view == dbmanager.connections && viewItem =~ /connection-connected|database-|schemaGroup|schema-|tableGroup|viewGroup|triggerGroup|extensionGroup|roleGroup|redisDb/",
           "group": "inline"
         }
       ]

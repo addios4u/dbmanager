@@ -41,7 +41,8 @@ export function activate(context: vscode.ExtensionContext): void {
       });
     }),
     vscode.commands.registerCommand(COMMAND_IDS.NEW_QUERY, (node) => {
-      panelManager.openQueryEditor((node as { connectionId: string }).connectionId);
+      const n = node as { connectionId: string; database?: string };
+      panelManager.openQueryEditor(n.connectionId, n.database);
     }),
     vscode.commands.registerCommand(COMMAND_IDS.VIEW_TABLE_DATA, (node) => {
       const n = node as { connectionId: string; tableName: string; schema?: string; database?: string };

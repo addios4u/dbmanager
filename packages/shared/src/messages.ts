@@ -45,7 +45,8 @@ export type WebviewMessage =
   | { type: 'redisDel'; connectionId: string; keys: string[] }
   | { type: 'redisSelectDb'; connectionId: string; db: number }
   | { type: 'redisAddKey'; connectionId: string; key: string; keyType: string; value: string; ttl?: number }
-  | { type: 'browseFile'; target: 'sqlite' | 'sshKey' };
+  | { type: 'browseFile'; target: 'sqlite' | 'sshKey' }
+  | { type: 'exportQueryResults'; format: 'csv' | 'json' | 'xml'; content: string; defaultFileName: string };
 
 // Extension → Webview
 export type ExtensionMessage =

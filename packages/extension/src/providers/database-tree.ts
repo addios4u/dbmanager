@@ -50,6 +50,13 @@ function getContextValue(node: DbTreeNode, connectionManager: ConnectionManager)
       ? 'connection-connected'
       : 'connection-disconnected';
   }
+  // database/schema 노드에 DB 타입 정보 포함 (e.g. "database-mysql", "schema-postgresql")
+  if (node.nodeType === 'database' || node.nodeType === 'schema') {
+    const config = connectionManager.getConnection(node.connectionId);
+    if (config) {
+      return `${node.nodeType}-${config.type}`;
+    }
+  }
   return node.nodeType;
 }
 
