@@ -113,6 +113,16 @@
         "title": "Open in DB Manager Query",
         "icon": "$(play)",
         "category": "DB Manager"
+      },
+      {
+        "command": "dbmanager.backupDatabase",
+        "title": "Backup Database",
+        "category": "DB Manager"
+      },
+      {
+        "command": "dbmanager.restoreDatabase",
+        "title": "Restore Database",
+        "category": "DB Manager"
       }
     ],
     "menus": {
@@ -193,6 +203,16 @@
           "command": "dbmanager.viewRedisData",
           "when": "view == dbmanager.connections && viewItem == redisDb",
           "group": "1_redis@1"
+        },
+        {
+          "command": "dbmanager.backupDatabase",
+          "when": "view == dbmanager.connections && viewItem =~ /^database-(mysql|mariadb|postgresql|sqlite)$/",
+          "group": "2_backup@1"
+        },
+        {
+          "command": "dbmanager.restoreDatabase",
+          "when": "view == dbmanager.connections && viewItem =~ /^database-(mysql|mariadb|postgresql|sqlite)$/",
+          "group": "2_backup@2"
         },
         {
           "command": "dbmanager.refresh",

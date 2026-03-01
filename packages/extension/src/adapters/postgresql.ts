@@ -167,6 +167,11 @@ export class PostgresqlAdapter implements DatabaseAdapter {
       let typeName = String(r['data_type']);
       if (typeName === 'USER-DEFINED') {
         typeName = String(r['udt_name']);
+      } else if (typeName === 'ARRAY') {
+        // udt_name for arrays is prefixed with '_', e.g. _int4, _text, _varchar
+        const udt = String(r['udt_name'] ?? '');
+        const elementType = pgArrayUdtToType(udt);
+        typeName = `${elementType}[]`;
       }
       if (r['character_maximum_length']) {
         typeName += `(${r['character_maximum_length']})`;
@@ -338,4 +343,37 @@ export class PostgresqlAdapter implements DatabaseAdapter {
   dispose(): void {
     void this.disconnect();
   }
+}
+
+/** Map PostgreSQL array udt_name (e.g. _int4) to SQL element type. */
+function pgArrayUdtToType(udt: string): string {
+  // Strip leading underscore that marks array types
+  const base = udt.startsWith('_') ? udt.slice(1) : udt;
+  const map: Record<string, string> = {
+    int2: 'smallint',
+    int4: 'integer',
+    int8: 'bigint',
+    float4: 'real',
+    float8: 'double precision',
+    numeric: 'numeric',
+    bool: 'boolean',
+    varchar: 'character varying',
+    bpchar: 'character',
+    text: 'text',
+    bytea: 'bytea',
+    date: 'date',
+    time: 'time',
+    timetz: 'time with time zone',
+    timestamp: 'timestamp',
+    timestamptz: 'timestamp with time zone',
+    interval: 'interval',
+    uuid: 'uuid',
+    json: 'json',
+    jsonb: 'jsonb',
+    xml: 'xml',
+    inet: 'inet',
+    cidr: 'cidr',
+    macaddr: 'macaddr',
+  };
+  return map[base] ?? base;
 }

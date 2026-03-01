@@ -89,6 +89,11 @@ export class SshTunnelManager {
     return localPort;
   }
 
+  /** 특정 커넥션의 터널 로컬 포트를 반환한다. 터널이 없으면 undefined. */
+  getTunnelPort(connectionId: string): number | undefined {
+    return this.tunnels.get(connectionId)?.localPort;
+  }
+
   /** 특정 커넥션의 SSH 터널을 닫는다. */
   async closeTunnel(connectionId: string): Promise<void> {
     const entry = this.tunnels.get(connectionId);

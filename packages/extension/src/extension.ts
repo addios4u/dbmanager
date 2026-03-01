@@ -6,6 +6,7 @@ import { DatabaseTreeProvider } from './providers/database-tree.js';
 import { WebviewPanelManager } from './webview/panel-manager.js';
 import { SqlEditorProvider } from './webview/sql-editor-provider.js';
 import { COMMAND_IDS, VIEW_IDS } from '@dbmanager/shared';
+import { BackupService } from './services/backup-service.js';
 
 let connectionManager: ConnectionManager;
 let treeProvider: DatabaseTreeProvider;
@@ -55,6 +56,9 @@ export function activate(context: vscode.ExtensionContext): void {
   );
   // Also redirect if a .sql file is already active when the extension starts
   redirectSqlEditor(vscode.window.activeTextEditor);
+
+  // Initialize backup service
+  const backupService = new BackupService(connectionManager);
 
   // Register commands
   context.subscriptions.push(
@@ -130,15 +134,34 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     }),
     vscode.commands.registerCommand(COMMAND_IDS.DROP_TABLE, async (node) => {
-      const n = node as { connectionId: string; tableName: string };
+      const n = node as { connectionId: string; tableName: string; schema?: string; database?: string };
       const confirm = await vscode.window.showWarningMessage(
         `Drop table "${n.tableName}"? This action cannot be undone.`,
         { modal: true },
         'Drop',
       );
       if (confirm === 'Drop') {
-        // TODO: Implement drop table via adapter
-        vscode.window.showInformationMessage(`Drop table "${n.tableName}" is not yet implemented.`);
+        try {
+          const adapter = connectionManager.getAdapter(n.connectionId);
+          if (!adapter || !('execute' in adapter)) {
+            vscode.window.showErrorMessage('No active connection for this table.');
+            return;
+          }
+          const config = connectionManager.getConnection(n.connectionId);
+          const dbType = config?.type ?? 'postgresql';
+          const q = (name: string) =>
+            dbType === 'mysql' || dbType === 'mariadb'
+              ? '`' + name.replace(/`/g, '``') + '`'
+              : '"' + name.replace(/"/g, '""') + '"';
+          const qualifiedName = n.schema
+            ? `${q(n.schema)}.${q(n.tableName)}`
+            : q(n.tableName);
+          await adapter.execute(`DROP TABLE ${qualifiedName}`);
+          vscode.window.showInformationMessage(`Table "${n.tableName}" has been dropped.`);
+          treeProvider.refresh();
+        } catch (err) {
+          vscode.window.showErrorMessage(`Drop table failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
       }
     }),
     vscode.commands.registerCommand(COMMAND_IDS.VIEW_REDIS_DATA, (node) => {
@@ -161,6 +184,24 @@ export function activate(context: vscode.ExtensionContext): void {
 
       // Open with our custom SQL editor
       await vscode.commands.executeCommand('vscode.openWith', fileUri, SqlEditorProvider.viewType);
+    }),
+    vscode.commands.registerCommand(COMMAND_IDS.BACKUP_DATABASE, (node) => {
+      const n = node as { connectionId: string; database?: string };
+      if (!n.database) {
+        vscode.window.showErrorMessage('No database selected for backup.');
+        return;
+      }
+      void backupService.backupDatabase(n.connectionId, n.database);
+    }),
+    vscode.commands.registerCommand(COMMAND_IDS.RESTORE_DATABASE, (node) => {
+      const n = node as { connectionId: string; database?: string };
+      if (!n.database) {
+        vscode.window.showErrorMessage('No database selected for restore.');
+        return;
+      }
+      void backupService.restoreDatabase(n.connectionId, n.database, () => {
+        treeProvider.refresh();
+      });
     }),
   );
 }

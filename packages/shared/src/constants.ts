@@ -21,6 +21,8 @@ export const COMMAND_IDS = {
   DROP_TABLE: 'dbmanager.dropTable',
   VIEW_REDIS_DATA: 'dbmanager.viewRedisData',
   OPEN_SQL_FILE: 'dbmanager.openSqlFile',
+  BACKUP_DATABASE: 'dbmanager.backupDatabase',
+  RESTORE_DATABASE: 'dbmanager.restoreDatabase',
 } as const;
 
 export const DEFAULT_PORTS: Record<string, number> = {

@@ -1,109 +1,209 @@
 # DB Manager
 
-VS Code / Cursor IDE용 데이터베이스 관리 익스텐션.
-DBeaver, Navicat, HeidiSQL 수준의 DB 관리 기능을 IDE 안에서 바로 사용할 수 있습니다.
+[![Version](https://img.shields.io/visual-studio-marketplace/v/addios4u.dbmanager)](https://marketplace.visualstudio.com/items?itemName=addios4u.dbmanager)
+[![Installs](https://img.shields.io/visual-studio-marketplace/i/addios4u.dbmanager)](https://marketplace.visualstudio.com/items?itemName=addios4u.dbmanager)
+[![Downloads](https://img.shields.io/visual-studio-marketplace/d/addios4u.dbmanager)](https://marketplace.visualstudio.com/items?itemName=addios4u.dbmanager)
+[![Rating](https://img.shields.io/visual-studio-marketplace/r/addios4u.dbmanager)](https://marketplace.visualstudio.com/items?itemName=addios4u.dbmanager)
 
-## 지원 데이터베이스
+**DB Manager** is a VS Code / Cursor extension that brings full-featured database management directly into your editor. Connect to MySQL, MariaDB, PostgreSQL, SQLite, and Redis — browse schemas, write queries, edit data, and export results without leaving your IDE.
 
-| Database | Driver | 비고 |
-|----------|--------|------|
+<!-- TODO: Add screenshot -->
+<!-- ![DB Manager overview](screenshots/screenshot1.png) -->
+
+---
+
+## Supported Databases
+
+| Database | Driver | Version |
+|----------|--------|---------|
 | MySQL | `mysql2` | 5.7+ |
 | MariaDB | `mysql2` | 10.3+ |
 | PostgreSQL | `pg` | 12+ |
 | SQLite | `better-sqlite3` | 3.x |
 | Redis | `ioredis` | 6+ |
 
-## 주요 기능
+---
 
-- **연결 관리** — 다중 DB 연결 저장/관리, 연결 그룹, OS 키체인 비밀번호 보관
-- **Explorer 사이드바 통합** — 탐색기에서 바로 DB 탐색
-- **스키마 브라우저** — 사이드바 트리뷰로 커넥션 클릭 → 펼쳐지며 DB/스키마/테이블/뷰/인덱스 탐색
-- **SQL 쿼리 편집기** — Monaco 기반 SQL 에디터, 자동완성, 구문 강조
-- **쿼리 결과 테이블** — AG Grid 기반 가상화 그리드, 정렬/필터/페이지네이션
-- **테이블 데이터 편집** — 인라인 INSERT/UPDATE/DELETE
-- **스키마 관리** — 테이블/인덱스/뷰 생성·수정·삭제 (DDL)
-- **데이터 내보내기/가져오기** — CSV, JSON, SQL Dump
-- **Redis 브라우저** — 키 탐색(SCAN), 값 편집, TTL 관리
-- **쿼리 히스토리** — 실행한 쿼리 기록 조회
+## Features
 
-## 기술 스택
+### Connection Management
+- Save and manage multiple database connections
+- Organize connections into **custom groups** (folders)
+- **Color-coded** connections for visual identification
+- **SSH tunnel** support with password or private key authentication
+- **SSL/TLS** support for secure remote connections
+- Passwords stored securely in the **OS keychain** via VS Code SecretStorage
+- Test connection before saving
 
-- **언어**: TypeScript (strict mode)
-- **UI**: React 18+ (VS Code Webview)
-- **상태관리**: Zustand
-- **SQL 에디터**: Monaco Editor
-- **데이터 그리드**: AG Grid (Community)
-- **빌드**: esbuild (익스텐션) + Vite (웹뷰)
-- **패키지 매니저**: pnpm workspaces (모노레포)
-- **테스트**: Vitest (유닛) + @vscode/test-cli (통합)
-- **린트/포맷**: ESLint + Prettier
+<!-- TODO: Add screenshot -->
+<!-- ![Connection management](screenshots/screenshot2.png) -->
 
-## 프로젝트 구조
+### Schema Browser
+Explore your database structure from the Explorer sidebar with a lazy-loading tree view.
 
 ```
-dbmanager/
-├── packages/
-│   ├── extension/      # VS Code 익스텐션 호스트 (Node.js)
-│   ├── webview-ui/     # React 웹뷰 앱 (브라우저)
-│   └── shared/         # 공유 타입 및 메시지 프로토콜
-├── pnpm-workspace.yaml
-└── tsconfig.base.json
+Connection Groups
+  └─ Connection (MySQL / PG / SQLite / Redis)
+       └─ Database
+            └─ Schema (PostgreSQL only)
+                 ├─ Tables
+                 │    └─ Table
+                 │         ├─ Columns (type, nullable, default, PK, auto-increment)
+                 │         ├─ Indexes (unique, primary, composite)
+                 │         └─ Foreign Keys (with cascade rules)
+                 └─ Views
 ```
 
-## 개발 환경 설정
+- Click a connection to auto-connect and expand its children
+- Right-click context menus for every node level
+- View DDL for tables and views
+- Drop tables with confirmation
 
-### 필수 요구사항
+### SQL Query Editor
 
-- Node.js 20+
-- pnpm 9+
-- VS Code 1.95+
+<!-- TODO: Add screenshot -->
+<!-- ![Query editor](screenshots/screenshot3.png) -->
 
-### 설치 및 빌드
+- **Monaco Editor** with SQL syntax highlighting
+- **Execute** full query or selected text only (`Cmd+Enter` / `Ctrl+Enter`)
+- **Query cancellation** — stop long-running queries mid-execution
+- **Database/schema context selector** — switch target database without reconnecting
+- **Query history** — browse and re-run up to 1,000 recent queries
+- **SQL file integration** — open `.sql` files directly in the DB Manager query editor with connection context metadata
+- **Execution stats** — elapsed time, affected rows, error details
+
+### Table Data Viewer & Editor
+
+<!-- TODO: Add screenshot -->
+<!-- ![Table data editor](screenshots/screenshot4.png) -->
+
+Powered by [AG Grid](https://www.ag-grid.com/) for high-performance data browsing:
+
+- **Sort & filter** columns by clicking headers
+- **Resize** columns by dragging borders
+- **Pagination** with First / Previous / Next / Last navigation (100 rows per page)
+- **WHERE clause** filtering — apply custom filters without leaving the grid
+- **Inline editing** — double-click cells to INSERT, UPDATE, or DELETE rows
+- **Batch changes** — stage multiple edits and apply them all at once
+- **Undo** pending changes before saving
+
+### Data Export
+
+Export query results or entire tables in multiple formats:
+
+| Format | Options |
+|--------|---------|
+| **CSV** | Configurable delimiter (comma, semicolon, tab, pipe) |
+| **JSON** | Optional pretty-print |
+| **SQL** | Optional `DROP TABLE` statement |
+| **XML** | Proper escaping |
+| **Excel** | `.xlsx` via ExcelJS |
+
+- Auto-suggested filenames with timestamps
+- Progress tracking for large exports
+
+### Backup & Restore
+
+Back up and restore databases directly from the sidebar context menu.
+
+| Database | Backup Method | Restore Method |
+|----------|--------------|----------------|
+| MySQL / MariaDB | `mysqldump` (with fallback to SQL export) | `mysql` CLI (with SQL fallback) |
+| PostgreSQL | `pg_dump` (with fallback to SQL export) | `psql` CLI (with SQL fallback) |
+| SQLite | File copy (including WAL/SHM) | File replacement |
+
+- Auto-detection of CLI tools with manual override
+- Progress tracking with cancellation support
+- Timestamped backup filenames
+- Works through SSH tunnels
+
+### Redis Browser
+- Select database (0–15) with key count per database
+- **SCAN-based** key browsing (safe for large databases — never uses `KEYS *`)
+- Tree view representation of keys with configurable delimiter
+- View, edit, and delete key values
+- TTL management (view and set expiration)
+- Add new keys with type selection
+
+### Server Information
+- View database version, character set, uptime, and platform details
+
+---
+
+## Getting Started
+
+1. Install **DB Manager** from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=addios4u.dbmanager) or [Open VSX Registry](https://open-vsx.org/extension/addios4u/dbmanager).
+2. Open the **Explorer** sidebar — you'll see the **DBManager - Connections** panel.
+3. Click the **+** button to add a new connection.
+4. Fill in connection details, click **Test Connection**, then **Save**.
+5. Click your saved connection to connect and browse schemas.
+6. Right-click a table to **View Data**, **Edit Data**, **Show DDL**, or **Export**.
+7. Right-click a database to open a **New Query** editor.
+
+---
+
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Cmd+Enter` / `Ctrl+Enter` | Execute query (or selected text) |
+| `Cmd+S` / `Ctrl+S` | Save query to `.sql` file |
+
+---
+
+## Requirements
+
+- VS Code 1.95+ or Cursor
+- For backup/restore CLI features: `mysqldump`/`mysql`, `pg_dump`/`psql` installed locally (optional — SQL-based fallback is always available)
+
+---
+
+## Development
 
 ```bash
-# 의존성 설치
+# Install dependencies
 pnpm install
 
-# 전체 빌드 (shared → webview-ui → extension 순서)
+# Build (shared → webview-ui → extension)
 pnpm build
 
-# 개발 모드 (watch)
+# Watch mode
 pnpm dev
-```
 
-### 디버깅
-
-VS Code에서 `F5`를 누르면 Extension Development Host가 실행됩니다.
-
-### 테스트
-
-```bash
-# 유닛 테스트
+# Run tests
 pnpm test
 
-# 유닛 테스트 (watch 모드)
-pnpm test:watch
-
-# 타입 체크
+# Type check
 pnpm typecheck
 
-# 린트
+# Lint
 pnpm lint
 ```
 
-## 배포
+Press **F5** in VS Code to launch the Extension Development Host.
 
-VS Code Marketplace와 Open VSX Registry(Cursor 호환)에 동시 배포합니다.
+### Tech Stack
 
-```bash
-# VSIX 패키징
-pnpm package
+| Layer | Technology |
+|-------|-----------|
+| Extension host | TypeScript + VS Code Extension API |
+| Webview UI | React 18 + Zustand |
+| SQL editor | Monaco Editor |
+| Data grid | AG Grid |
+| Build | esbuild (extension) + Vite (webview) |
+| Test | Vitest |
+| Package manager | pnpm workspaces (monorepo) |
 
-# 퍼블리시 (CI/CD에서 자동 실행)
-pnpm publish:vsce    # VS Code Marketplace
-pnpm publish:ovsx    # Open VSX (Cursor, VSCodium)
-```
+---
 
-## 라이선스
+## Support
+
+If you find DB Manager useful, consider buying me a coffee!
+
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/addios4u)
+
+---
+
+## License
 
 [MIT](LICENSE)

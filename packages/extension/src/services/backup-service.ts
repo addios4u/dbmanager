@@ -1,0 +1,955 @@
+import * as vscode from 'vscode';
+import * as cp from 'node:child_process';
+import * as fs from 'node:fs';
+import * as fsp from 'node:fs/promises';
+import * as os from 'node:os';
+import type { ConnectionConfig, DatabaseType } from '@dbmanager/shared';
+import { DEFAULT_PORTS, PAGE_SIZE } from '@dbmanager/shared';
+import type { ConnectionManager } from './connection-manager.js';
+import type { DatabaseAdapter } from '../adapters/base.js';
+
+export class BackupService {
+  private readonly cliCache = new Map<string, string | false>();
+
+  constructor(private readonly connectionManager: ConnectionManager) {}
+
+  // ---------------------------------------------------------------------------
+  // Public API
+  // ---------------------------------------------------------------------------
+
+  async backupDatabase(connectionId: string, database: string): Promise<void> {
+    const config = this.connectionManager.getConnection(connectionId);
+    if (!config) {
+      vscode.window.showErrorMessage('Connection not found.');
+      return;
+    }
+    if (!this.connectionManager.isConnected(connectionId)) {
+      vscode.window.showErrorMessage('Database is not connected.');
+      return;
+    }
+
+    const isSqlite = config.type === 'sqlite';
+    const filters: Record<string, string[]> = isSqlite
+      ? { 'Database Files': ['db', 'sqlite', 'sqlite3', 'bak'], 'All Files': ['*'] }
+      : { 'SQL Files': ['sql'], 'All Files': ['*'] };
+
+    const defaultName = isSqlite
+      ? `${database}-backup-${timestamp()}.db`
+      : `${database}-backup-${timestamp()}.sql`;
+
+    const saveUri = await vscode.window.showSaveDialog({
+      defaultUri: vscode.Uri.file(defaultName),
+      filters,
+      title: `Backup Database: ${database}`,
+    });
+    if (!saveUri) return;
+
+    const filePath = saveUri.fsPath;
+
+    await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: `Backing up "${database}"`, cancellable: true },
+      async (progress, token) => {
+        try {
+          await this.dispatchBackup(config, connectionId, database, filePath, progress, token);
+          const action = await vscode.window.showInformationMessage(
+            `Backup complete: ${filePath}`,
+            'Open File',
+          );
+          if (action === 'Open File') {
+            void vscode.env.openExternal(vscode.Uri.file(filePath));
+          }
+        } catch (err) {
+          // Clean up partial file on failure
+          try { await fsp.unlink(filePath); } catch { /* ignore */ }
+          vscode.window.showErrorMessage(`Backup failed: ${errMsg(err)}`);
+        }
+      },
+    );
+  }
+
+  async restoreDatabase(
+    connectionId: string,
+    database: string,
+    refreshCallback?: () => void,
+  ): Promise<void> {
+    const config = this.connectionManager.getConnection(connectionId);
+    if (!config) {
+      vscode.window.showErrorMessage('Connection not found.');
+      return;
+    }
+    if (!this.connectionManager.isConnected(connectionId)) {
+      vscode.window.showErrorMessage('Database is not connected.');
+      return;
+    }
+
+    const confirm = await vscode.window.showWarningMessage(
+      `Restoring will overwrite data in database "${database}". This action cannot be undone. Continue?`,
+      { modal: true },
+      'Restore',
+    );
+    if (confirm !== 'Restore') return;
+
+    const isSqlite = config.type === 'sqlite';
+    const filters: Record<string, string[]> = isSqlite
+      ? { 'Database Files': ['db', 'sqlite', 'sqlite3', 'bak'], 'All Files': ['*'] }
+      : { 'SQL Files': ['sql'], 'All Files': ['*'] };
+
+    const openUri = await vscode.window.showOpenDialog({
+      filters,
+      canSelectMany: false,
+      title: `Restore Database: ${database}`,
+    });
+    const selectedUri = openUri?.[0];
+    if (!selectedUri) return;
+
+    const filePath = selectedUri.fsPath;
+
+    await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: `Restoring "${database}"`, cancellable: false },
+      async (progress) => {
+        try {
+          await this.dispatchRestore(config, connectionId, database, filePath, progress);
+          refreshCallback?.();
+          vscode.window.showInformationMessage(`Restore complete: ${database}`);
+        } catch (err) {
+          vscode.window.showErrorMessage(`Restore failed: ${errMsg(err)}`);
+        }
+      },
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Dispatcher
+  // ---------------------------------------------------------------------------
+
+  private async dispatchBackup(
+    config: ConnectionConfig,
+    connectionId: string,
+    database: string,
+    filePath: string,
+    progress: vscode.Progress<{ message?: string; increment?: number }>,
+    token: vscode.CancellationToken,
+  ): Promise<void> {
+    const password = await this.connectionManager.getPassword(connectionId);
+
+    switch (config.type) {
+      case 'mysql':
+      case 'mariadb':
+        await this.backupMysql(config, connectionId, database, filePath, password, progress, token);
+        break;
+      case 'postgresql':
+        await this.backupPostgresql(config, connectionId, database, filePath, password, progress, token);
+        break;
+      case 'sqlite':
+        await this.backupSqlite(config, filePath, progress);
+        break;
+      default:
+        throw new Error(`Backup not supported for ${config.type}`);
+    }
+  }
+
+  private async dispatchRestore(
+    config: ConnectionConfig,
+    connectionId: string,
+    database: string,
+    filePath: string,
+    progress: vscode.Progress<{ message?: string; increment?: number }>,
+  ): Promise<void> {
+    const password = await this.connectionManager.getPassword(connectionId);
+
+    switch (config.type) {
+      case 'mysql':
+      case 'mariadb':
+        await this.restoreMysql(config, connectionId, database, filePath, password, progress);
+        break;
+      case 'postgresql':
+        await this.restorePostgresql(config, connectionId, database, filePath, password, progress);
+        break;
+      case 'sqlite':
+        await this.restoreSqlite(config, connectionId, filePath, progress);
+        break;
+      default:
+        throw new Error(`Restore not supported for ${config.type}`);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // MySQL / MariaDB Backup
+  // ---------------------------------------------------------------------------
+
+  private async backupMysql(
+    config: ConnectionConfig,
+    connectionId: string,
+    database: string,
+    filePath: string,
+    password: string | undefined,
+    progress: vscode.Progress<{ message?: string; increment?: number }>,
+    token: vscode.CancellationToken,
+  ): Promise<void> {
+    const toolPath = await this.promptCliPath('mysqldump');
+    if (toolPath) {
+      try {
+        await this.backupMysqlCli(config, connectionId, database, filePath, password, toolPath, progress, token);
+        return;
+      } catch {
+        progress.report({ message: 'CLI failed, falling back to SQL...' });
+      }
+    }
+    await this.backupMysqlSql(connectionId, database, filePath, config.type, progress, token);
+  }
+
+  private async backupMysqlCli(
+    config: ConnectionConfig,
+    connectionId: string,
+    database: string,
+    filePath: string,
+    password: string | undefined,
+    toolPath: string,
+    progress: vscode.Progress<{ message?: string; increment?: number }>,
+    token: vscode.CancellationToken,
+  ): Promise<void> {
+    const { host, port } = this.getConnectionParams(config, connectionId);
+    const args = [
+      '--host', host,
+      '--port', String(port),
+      '--single-transaction',
+      '--routines',
+      '--triggers',
+      '--set-gtid-purged=OFF',
+      '--result-file', filePath,
+    ];
+    if (config.username) args.push('--user', config.username);
+    args.push(database);
+
+    const env: Record<string, string> = { ...process.env as Record<string, string> };
+    if (password) env['MYSQL_PWD'] = password;
+
+    progress.report({ message: 'Running mysqldump...' });
+    await this.spawnCliTool(toolPath, args, env, token);
+  }
+
+  private async backupMysqlSql(
+    connectionId: string,
+    database: string,
+    filePath: string,
+    dbType: DatabaseType,
+    progress: vscode.Progress<{ message?: string; increment?: number }>,
+    token: vscode.CancellationToken,
+  ): Promise<void> {
+    const adapter = this.connectionManager.getAdapter(connectionId) as DatabaseAdapter;
+
+    // Switch to the target database
+    await adapter.execute(`USE ${quoteId(database, dbType)}`);
+
+    const fh = await fsp.open(filePath, 'w');
+    try {
+      await fh.write(`-- DBManager Backup: ${database}\n`);
+      await fh.write(`-- Date: ${new Date().toISOString()}\n`);
+      await fh.write(`-- Method: Pure SQL\n\n`);
+      await fh.write(`SET FOREIGN_KEY_CHECKS=0;\n\n`);
+
+      const allTables = await adapter.getTables();
+      const tables = allTables.filter((t) => t.type === 'table');
+      const views = allTables.filter((t) => t.type === 'view');
+      const total = tables.length + views.length;
+      let done = 0;
+
+      for (const table of tables) {
+        throwIfCancelled(token);
+        progress.report({ message: `${table.name} (${++done}/${total})` });
+
+        const ddl = await adapter.getTableDDL(table.name);
+        await fh.write(`DROP TABLE IF EXISTS ${quoteId(table.name, dbType)};\n`);
+        await fh.write(`${ddl.replace(/;+\s*$/, '')};\n\n`);
+
+        await this.dumpTableData(adapter, table.name, dbType, fh, token);
+      }
+
+      for (const view of views) {
+        throwIfCancelled(token);
+        progress.report({ message: `view ${view.name} (${++done}/${total})` });
+
+        const ddl = await adapter.getTableDDL(view.name);
+        await fh.write(`DROP VIEW IF EXISTS ${quoteId(view.name, dbType)};\n`);
+        await fh.write(`${ddl.replace(/;+\s*$/, '')};\n\n`);
+      }
+
+      await fh.write(`SET FOREIGN_KEY_CHECKS=1;\n`);
+    } finally {
+      await fh.close();
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // PostgreSQL Backup
+  // ---------------------------------------------------------------------------
+
+  private async backupPostgresql(
+    config: ConnectionConfig,
+    connectionId: string,
+    database: string,
+    filePath: string,
+    password: string | undefined,
+    progress: vscode.Progress<{ message?: string; increment?: number }>,
+    token: vscode.CancellationToken,
+  ): Promise<void> {
+    const toolPath = await this.promptCliPath('pg_dump');
+    if (toolPath) {
+      try {
+        await this.backupPgCli(config, connectionId, database, filePath, password, toolPath, progress, token);
+        return;
+      } catch {
+        progress.report({ message: 'CLI failed, falling back to SQL...' });
+      }
+    }
+    await this.backupPgSql(connectionId, database, filePath, progress, token);
+  }
+
+  private async backupPgCli(
+    config: ConnectionConfig,
+    connectionId: string,
+    database: string,
+    filePath: string,
+    password: string | undefined,
+    toolPath: string,
+    progress: vscode.Progress<{ message?: string; increment?: number }>,
+    token: vscode.CancellationToken,
+  ): Promise<void> {
+    const { host, port } = this.getConnectionParams(config, connectionId);
+    const args = [
+      '--host', host,
+      '--port', String(port),
+      '--format', 'plain',
+      '--clean',
+      '--if-exists',
+      '--file', filePath,
+      '--no-password',
+    ];
+    if (config.username) args.push('--username', config.username);
+    args.push(database);
+
+    const env: Record<string, string> = { ...process.env as Record<string, string> };
+    if (password) env['PGPASSWORD'] = password;
+
+    progress.report({ message: 'Running pg_dump...' });
+    await this.spawnCliTool(toolPath, args, env, token);
+  }
+
+  private async backupPgSql(
+    connectionId: string,
+    database: string,
+    filePath: string,
+    progress: vscode.Progress<{ message?: string; increment?: number }>,
+    token: vscode.CancellationToken,
+  ): Promise<void> {
+    const adapter = this.connectionManager.getAdapter(connectionId) as DatabaseAdapter;
+    const dbType: DatabaseType = 'postgresql';
+
+    // Switch to the target database
+    const pgAdapter = adapter as DatabaseAdapter & { switchDatabase?(db: string): Promise<void> };
+    if (pgAdapter.switchDatabase) {
+      await pgAdapter.switchDatabase(database);
+    }
+
+    const fh = await fsp.open(filePath, 'w');
+    try {
+      await fh.write(`-- DBManager Backup: ${database}\n`);
+      await fh.write(`-- Date: ${new Date().toISOString()}\n`);
+      await fh.write(`-- Method: Pure SQL\n\n`);
+
+      const schemas = await adapter.getSchemas();
+      // Filter out system schemas
+      const userSchemas = schemas.filter(
+        (s) => !s.startsWith('pg_') && s !== 'information_schema',
+      );
+
+      for (const schema of userSchemas) {
+        throwIfCancelled(token);
+        progress.report({ message: `Schema: ${schema}` });
+
+        await fh.write(`-- Schema: ${schema}\n`);
+        if (schema !== 'public') {
+          await fh.write(`CREATE SCHEMA IF NOT EXISTS ${quoteId(schema, dbType)};\n`);
+        }
+        await fh.write(`SET search_path TO ${quoteId(schema, dbType)};\n\n`);
+
+        // Set search_path for subsequent queries
+        await adapter.execute(`SET search_path TO ${quoteId(schema, dbType)}`);
+
+        const allTables = await adapter.getTables(schema);
+        const tables = allTables.filter((t) => t.type === 'table');
+        const views = allTables.filter((t) => t.type === 'view');
+
+        for (const table of tables) {
+          throwIfCancelled(token);
+          progress.report({ message: `${schema}.${table.name}` });
+
+          const ddl = await adapter.getTableDDL(table.name, schema);
+          await fh.write(`DROP TABLE IF EXISTS ${quoteId(schema, dbType)}.${quoteId(table.name, dbType)} CASCADE;\n`);
+          await fh.write(`${ddl.replace(/;+\s*$/, '')};\n\n`);
+
+          await this.dumpTableData(
+            adapter,
+            `${quoteId(schema, dbType)}.${quoteId(table.name, dbType)}`,
+            dbType,
+            fh,
+            token,
+            table.name,
+          );
+        }
+
+        for (const view of views) {
+          throwIfCancelled(token);
+          progress.report({ message: `view ${schema}.${view.name}` });
+
+          const ddl = await adapter.getTableDDL(view.name, schema);
+          await fh.write(`DROP VIEW IF EXISTS ${quoteId(schema, dbType)}.${quoteId(view.name, dbType)} CASCADE;\n`);
+          await fh.write(`${ddl.replace(/;+\s*$/, '')};\n\n`);
+        }
+      }
+    } finally {
+      await fh.close();
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // SQLite Backup / Restore
+  // ---------------------------------------------------------------------------
+
+  private async backupSqlite(
+    config: ConnectionConfig,
+    filePath: string,
+    progress: vscode.Progress<{ message?: string; increment?: number }>,
+  ): Promise<void> {
+    const sourcePath = resolvePath(config.filepath ?? '');
+    if (!sourcePath) throw new Error('SQLite file path is required');
+
+    progress.report({ message: 'Copying database file...' });
+    await fsp.copyFile(sourcePath, filePath);
+
+    // Copy WAL and SHM files if they exist
+    for (const suffix of ['-wal', '-shm']) {
+      const src = sourcePath + suffix;
+      try {
+        await fsp.access(src);
+        await fsp.copyFile(src, filePath + suffix);
+      } catch { /* file doesn't exist, skip */ }
+    }
+  }
+
+  private async restoreSqlite(
+    config: ConnectionConfig,
+    connectionId: string,
+    filePath: string,
+    progress: vscode.Progress<{ message?: string; increment?: number }>,
+  ): Promise<void> {
+    const targetPath = resolvePath(config.filepath ?? '');
+    if (!targetPath) throw new Error('SQLite file path is required');
+
+    // Disconnect to release file handle (better-sqlite3 holds a lock)
+    await this.connectionManager.disconnect(connectionId);
+
+    try {
+      progress.report({ message: 'Restoring database file...' });
+      await fsp.copyFile(filePath, targetPath);
+
+      // Remove stale WAL/SHM from target
+      for (const suffix of ['-wal', '-shm']) {
+        try { await fsp.unlink(targetPath + suffix); } catch { /* ignore */ }
+      }
+
+      // Copy WAL/SHM from backup if they exist
+      for (const suffix of ['-wal', '-shm']) {
+        const src = filePath + suffix;
+        try {
+          await fsp.access(src);
+          await fsp.copyFile(src, targetPath + suffix);
+        } catch { /* ignore */ }
+      }
+    } finally {
+      // Reconnect regardless of outcome
+      await this.connectionManager.connect(connectionId);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // MySQL / MariaDB Restore
+  // ---------------------------------------------------------------------------
+
+  private async restoreMysql(
+    config: ConnectionConfig,
+    connectionId: string,
+    database: string,
+    filePath: string,
+    password: string | undefined,
+    progress: vscode.Progress<{ message?: string; increment?: number }>,
+  ): Promise<void> {
+    const toolPath = await this.promptCliPath('mysql');
+    if (toolPath) {
+      try {
+        await this.restoreMysqlCli(config, connectionId, database, filePath, password, toolPath, progress);
+        return;
+      } catch {
+        progress.report({ message: 'CLI failed, falling back to SQL...' });
+      }
+    }
+    await this.restoreMysqlSql(connectionId, database, filePath, config.type, progress);
+  }
+
+  private async restoreMysqlCli(
+    config: ConnectionConfig,
+    connectionId: string,
+    database: string,
+    filePath: string,
+    password: string | undefined,
+    toolPath: string,
+    progress: vscode.Progress<{ message?: string; increment?: number }>,
+  ): Promise<void> {
+    const { host, port } = this.getConnectionParams(config, connectionId);
+    const args = [
+      '--host', host,
+      '--port', String(port),
+      '--database', database,
+    ];
+    if (config.username) args.push('--user', config.username);
+
+    const env: Record<string, string> = { ...process.env as Record<string, string> };
+    if (password) env['MYSQL_PWD'] = password;
+
+    progress.report({ message: 'Restoring from SQL file...' });
+    await this.spawnCliToolWithFileInput(toolPath, args, filePath, env);
+  }
+
+  private async restoreMysqlSql(
+    connectionId: string,
+    database: string,
+    filePath: string,
+    dbType: DatabaseType,
+    progress: vscode.Progress<{ message?: string; increment?: number }>,
+  ): Promise<void> {
+    const adapter = this.connectionManager.getAdapter(connectionId) as DatabaseAdapter;
+    await adapter.execute(`USE ${quoteId(database, dbType)}`);
+    await this.executeSqlFile(adapter, filePath, progress);
+  }
+
+  // ---------------------------------------------------------------------------
+  // PostgreSQL Restore
+  // ---------------------------------------------------------------------------
+
+  private async restorePostgresql(
+    config: ConnectionConfig,
+    connectionId: string,
+    database: string,
+    filePath: string,
+    password: string | undefined,
+    progress: vscode.Progress<{ message?: string; increment?: number }>,
+  ): Promise<void> {
+    const toolPath = await this.promptCliPath('psql');
+    if (toolPath) {
+      try {
+        await this.restorePgCli(config, connectionId, database, filePath, password, toolPath, progress);
+        return;
+      } catch {
+        progress.report({ message: 'CLI failed, falling back to SQL...' });
+      }
+    }
+    await this.restorePgSql(connectionId, database, filePath, progress);
+  }
+
+  private async restorePgCli(
+    config: ConnectionConfig,
+    connectionId: string,
+    database: string,
+    filePath: string,
+    password: string | undefined,
+    toolPath: string,
+    progress: vscode.Progress<{ message?: string; increment?: number }>,
+  ): Promise<void> {
+    const { host, port } = this.getConnectionParams(config, connectionId);
+    const args = [
+      '--host', host,
+      '--port', String(port),
+      '--dbname', database,
+      '--file', filePath,
+      '--no-password',
+    ];
+    if (config.username) args.push('--username', config.username);
+
+    const env: Record<string, string> = { ...process.env as Record<string, string> };
+    if (password) env['PGPASSWORD'] = password;
+
+    progress.report({ message: 'Restoring from SQL file...' });
+    try {
+      await this.spawnCliTool(toolPath, args, env);
+    } catch (err) {
+      // psql returns non-zero if any statement fails, but tables without errors are restored.
+      const msg = err instanceof Error ? err.message : String(err);
+      vscode.window.showWarningMessage(
+        `psql completed with errors. Some statements may have failed:\n${msg.slice(0, 300)}`,
+      );
+    }
+  }
+
+  private async restorePgSql(
+    connectionId: string,
+    database: string,
+    filePath: string,
+    progress: vscode.Progress<{ message?: string; increment?: number }>,
+  ): Promise<void> {
+    const adapter = this.connectionManager.getAdapter(connectionId) as DatabaseAdapter;
+    const pgAdapter = adapter as DatabaseAdapter & { switchDatabase?(db: string): Promise<void> };
+    if (pgAdapter.switchDatabase) {
+      await pgAdapter.switchDatabase(database);
+    }
+    await this.executeSqlFile(adapter, filePath, progress);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Shared helpers: data dump & SQL file execution
+  // ---------------------------------------------------------------------------
+
+  private async dumpTableData(
+    adapter: DatabaseAdapter,
+    qualifiedTable: string,
+    dbType: DatabaseType,
+    fh: fsp.FileHandle,
+    token: vscode.CancellationToken,
+    rawTableName?: string,
+  ): Promise<void> {
+    const isPostgres = dbType === 'postgresql';
+    let offset = 0;
+
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      throwIfCancelled(token);
+
+      const limitClause = isPostgres
+        ? `LIMIT $1 OFFSET $2`
+        : `LIMIT ? OFFSET ?`;
+      const result = await adapter.execute(
+        `SELECT * FROM ${qualifiedTable} ${limitClause}`,
+        [PAGE_SIZE, offset],
+      );
+      if (result.rows.length === 0) break;
+
+      const insertTable = rawTableName
+        ? quoteId(rawTableName, dbType)
+        : qualifiedTable;
+
+      // Detect boolean columns from result metadata (PG OID 16 = boolean)
+      const boolCols = isPostgres
+        ? new Set(result.columns.filter((c) => c.type === '16').map((c) => c.name))
+        : undefined;
+
+      for (const row of result.rows) {
+        const keys = Object.keys(row);
+        const cols = keys.map((c) => quoteId(c, dbType)).join(', ');
+        const vals = keys.map((k) => {
+          const v = row[k];
+          // pg driver may return 0/1 as number for boolean columns
+          if (boolCols?.has(k) && (typeof v === 'number' || typeof v === 'string')) {
+            if (v === null || v === undefined) return 'NULL';
+            return v === 1 || v === '1' || v === 't' || v === 'true' ? 'TRUE' : 'FALSE';
+          }
+          return sqlValue(v);
+        }).join(', ');
+        await fh.write(`INSERT INTO ${insertTable} (${cols}) VALUES (${vals});\n`);
+      }
+
+      offset += PAGE_SIZE;
+      if (result.rows.length < PAGE_SIZE) break;
+    }
+
+    if (offset > 0) {
+      await fh.write('\n');
+    }
+  }
+
+  private async executeSqlFile(
+    adapter: DatabaseAdapter,
+    filePath: string,
+    progress: vscode.Progress<{ message?: string; increment?: number }>,
+  ): Promise<void> {
+    const content = await fsp.readFile(filePath, 'utf-8');
+    const statements = splitSqlStatements(content);
+    const total = statements.length;
+    const errors: string[] = [];
+
+    for (let i = 0; i < total; i++) {
+      const stmt = statements[i];
+      if (!stmt) continue;
+
+      progress.report({ message: `Statement ${i + 1}/${total}` });
+      try {
+        await adapter.execute(stmt);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        const preview = stmt.length > 80 ? stmt.slice(0, 80) + '...' : stmt;
+        errors.push(`[${i + 1}] ${msg}\n    ${preview}`);
+      }
+    }
+
+    if (errors.length > 0) {
+      const succeeded = total - errors.length;
+      vscode.window.showWarningMessage(
+        `Restore completed with ${errors.length} error(s) out of ${total} statements (${succeeded} succeeded).`,
+        'Show Details',
+      ).then((action) => {
+        if (action === 'Show Details') {
+          const doc = errors.join('\n\n');
+          void vscode.workspace.openTextDocument({ content: doc, language: 'text' })
+            .then((d) => vscode.window.showTextDocument(d));
+        }
+      });
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // CLI tool detection & execution
+  // ---------------------------------------------------------------------------
+
+  private async findCliTool(name: string): Promise<string | undefined> {
+    const cached = this.cliCache.get(name);
+    if (cached !== undefined) return cached || undefined;
+
+    const cmd = process.platform === 'win32' ? 'where' : 'which';
+    try {
+      const stdout = await execPromise(cmd, [name]);
+      const toolPath = stdout.trim().split('\n')[0];
+      if (toolPath) {
+        this.cliCache.set(name, toolPath);
+        return toolPath;
+      }
+      this.cliCache.set(name, false);
+      return undefined;
+    } catch {
+      this.cliCache.set(name, false);
+      return undefined;
+    }
+  }
+
+  /**
+   * CLI 경로를 자동 감지한 뒤 InputBox로 사용자에게 확인/수정 기회를 준다.
+   * - 값을 비우고 확인하면 CLI를 건너뛰고 SQL 폴백 사용.
+   * - ESC로 취소하면 undefined 반환 (SQL 폴백).
+   */
+  private async promptCliPath(toolName: string): Promise<string | undefined> {
+    const detected = await this.findCliTool(toolName);
+    const userInput = await vscode.window.showInputBox({
+      title: `${toolName} CLI Path`,
+      prompt: `${toolName} 경로를 확인하세요. 비워두면 SQL 방식으로 실행합니다.`,
+      value: detected ?? '',
+      placeHolder: `/usr/local/bin/${toolName}`,
+      ignoreFocusOut: true,
+    });
+
+    // ESC 취소 또는 빈 문자열 → CLI 건너뜀
+    if (userInput === undefined || userInput.trim() === '') {
+      return undefined;
+    }
+    return userInput.trim();
+  }
+
+  private spawnCliTool(
+    cmd: string,
+    args: string[],
+    env?: Record<string, string>,
+    token?: vscode.CancellationToken,
+  ): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const proc = cp.spawn(cmd, args, {
+        env: env ?? (process.env as Record<string, string>),
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+
+      let stdout = '';
+      let stderr = '';
+      proc.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
+      proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+
+      const disposable = token?.onCancellationRequested(() => {
+        proc.kill('SIGTERM');
+      });
+
+      proc.on('close', (code) => {
+        disposable?.dispose();
+        if (code === 0) {
+          resolve(stdout);
+        } else {
+          reject(new Error(stderr || `${cmd} exited with code ${code}`));
+        }
+      });
+      proc.on('error', (err) => {
+        disposable?.dispose();
+        reject(err);
+      });
+    });
+  }
+
+  private spawnCliToolWithFileInput(
+    cmd: string,
+    args: string[],
+    inputFilePath: string,
+    env?: Record<string, string>,
+  ): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const proc = cp.spawn(cmd, args, {
+        env: env ?? (process.env as Record<string, string>),
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+
+      const inputStream = fs.createReadStream(inputFilePath);
+      inputStream.pipe(proc.stdin);
+
+      let stdout = '';
+      let stderr = '';
+      proc.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
+      proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+
+      proc.on('close', (code) => {
+        if (code === 0) {
+          resolve(stdout);
+        } else {
+          reject(new Error(stderr || `${cmd} exited with code ${code}`));
+        }
+      });
+      proc.on('error', reject);
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Connection params (SSH tunnel aware)
+  // ---------------------------------------------------------------------------
+
+  private getConnectionParams(
+    config: ConnectionConfig,
+    connectionId: string,
+  ): { host: string; port: number } {
+    if (config.ssh?.enabled) {
+      const tunnelPort = this.connectionManager.sshTunnels.getTunnelPort(connectionId);
+      if (tunnelPort) {
+        return { host: '127.0.0.1', port: tunnelPort };
+      }
+    }
+    return {
+      host: config.host ?? 'localhost',
+      port: config.port ?? DEFAULT_PORTS[config.type] ?? 3306,
+    };
+  }
+}
+
+// =============================================================================
+// Standalone utility functions
+// =============================================================================
+
+function quoteId(name: string, dbType: DatabaseType): string {
+  if (dbType === 'mysql' || dbType === 'mariadb') {
+    return '`' + name.replace(/`/g, '``') + '`';
+  }
+  return '"' + name.replace(/"/g, '""') + '"';
+}
+
+function sqlValue(value: unknown): string {
+  if (value === null || value === undefined) return 'NULL';
+  if (typeof value === 'number' || typeof value === 'bigint') return String(value);
+  if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
+  if (value instanceof Date) return `'${value.toISOString()}'`;
+  if (Buffer.isBuffer(value)) return `X'${value.toString('hex')}'`;
+  if (Array.isArray(value)) {
+    // PostgreSQL array literal: '{val1,val2,...}'
+    const elements = value.map((v) => {
+      if (v === null || v === undefined) return 'NULL';
+      if (typeof v === 'number' || typeof v === 'bigint') return String(v);
+      if (typeof v === 'boolean') return v ? 't' : 'f';
+      // Escape double-quotes and backslashes inside array elements
+      const s = String(v).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+      return `"${s}"`;
+    });
+    return `'${`{${elements.join(',')}}`}'`;
+  }
+  return "'" + String(value).replace(/'/g, "''") + "'";
+}
+
+function splitSqlStatements(sql: string): string[] {
+  const statements: string[] = [];
+  let current = '';
+  let inString = false;
+  let stringChar = '';
+
+  for (let i = 0; i < sql.length; i++) {
+    const ch = sql[i]!;
+
+    if (inString) {
+      current += ch;
+      if (ch === stringChar) {
+        if (sql[i + 1] === stringChar) {
+          current += sql[++i]; // escaped quote
+        } else {
+          inString = false;
+        }
+      }
+    } else if (ch === '-' && sql[i + 1] === '-') {
+      // Single-line comment: skip to end of line
+      while (i < sql.length && sql[i] !== '\n') {
+        i++;
+      }
+    } else if (ch === '/' && sql[i + 1] === '*') {
+      // Block comment: skip to */
+      i += 2;
+      while (i < sql.length && !(sql[i] === '*' && sql[i + 1] === '/')) {
+        i++;
+      }
+      i++; // skip past '/'
+    } else if (ch === "'" || ch === '"') {
+      inString = true;
+      stringChar = ch;
+      current += ch;
+    } else if (ch === ';') {
+      const trimmed = current.trim();
+      if (trimmed) {
+        statements.push(trimmed);
+      }
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+
+  const trimmed = current.trim();
+  if (trimmed) {
+    statements.push(trimmed);
+  }
+
+  return statements;
+}
+
+function resolvePath(filepath: string): string {
+  if (filepath.startsWith('~')) {
+    return filepath.replace(/^~/, os.homedir());
+  }
+  return filepath;
+}
+
+function timestamp(): string {
+  return new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+}
+
+function errMsg(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
+function throwIfCancelled(token: vscode.CancellationToken): void {
+  if (token.isCancellationRequested) {
+    throw new Error('Backup cancelled');
+  }
+}
+
+function execPromise(cmd: string, args: string[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    cp.execFile(cmd, args, (err, stdout) => {
+      if (err) reject(err);
+      else resolve(stdout);
+    });
+  });
+}
