@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { open as fsOpen } from 'fs/promises';
 import type { FileHandle } from 'fs/promises';
 import * as path from 'path';
-import type { WebviewMessage, ExtensionMessage, ConnectionConfig, PanelMeta, TableEdit, ExportOptions } from '@dbmanager/shared';
+import type { WebviewMessage, ExtensionMessage, ConnectionConfig, PanelMeta, TableEdit, ExportOptions, ColumnMeta } from '@dbmanager/shared';
 import { PAGE_SIZE } from '@dbmanager/shared';
 import type { ConnectionManager } from '../services/connection-manager.js';
 import type { DatabaseAdapter, RedisAdapter } from '../adapters/base.js';
@@ -188,7 +188,7 @@ export class WebviewPanelManager {
       }
 
       case 'executeQuery': {
-        void this.handleExecuteQuery(panel, msg.connectionId, msg.sql);
+        void this.handleExecuteQuery(panel, msg.connectionId, msg.sql, meta);
         break;
       }
 
@@ -309,6 +309,11 @@ export class WebviewPanelManager {
 
       case 'exportQueryResults': {
         void this.handleExportQueryResults(panel, msg.format, msg.content, msg.defaultFileName);
+        break;
+      }
+
+      case 'exportQueryResultsXlsx': {
+        void this.handleExportQueryResultsXlsx(panel, msg.columns, msg.rows, msg.defaultFileName);
         break;
       }
 
@@ -441,6 +446,7 @@ export class WebviewPanelManager {
     panel: vscode.WebviewPanel,
     connectionId: string,
     sql: string,
+    meta?: PanelMeta,
   ): Promise<void> {
     const dbAdapter = await this.ensureConnected(connectionId);
     if (!dbAdapter) {
@@ -452,6 +458,23 @@ export class WebviewPanelManager {
       void panel.webview.postMessage(errMsg);
       return;
     }
+
+    // Restore database context (tree browsing may have switched the adapter's pool)
+    if (meta?.database) {
+      const config = this.connectionManager.getConnection(connectionId);
+      if (config?.type === 'postgresql') {
+        const pgAdapter = dbAdapter as DatabaseAdapter & { switchDatabase?(db: string): Promise<void> };
+        if (pgAdapter.switchDatabase) {
+          await pgAdapter.switchDatabase(meta.database);
+        }
+      } else if (config?.type === 'mysql' || config?.type === 'mariadb') {
+        await dbAdapter.execute(`USE ${quoteIdentifier(meta.database, config.type)}`);
+      }
+      if (meta.schema && config?.type === 'postgresql') {
+        await dbAdapter.execute(`SET search_path TO ${quoteIdentifier(meta.schema, config.type)}`);
+      }
+    }
+
     try {
       const result = await dbAdapter.execute(sql);
       const resultMsg: ExtensionMessage = {
@@ -844,6 +867,72 @@ export class WebviewPanelManager {
 
     try {
       await vscode.workspace.fs.writeFile(saveUri, Buffer.from(content, 'utf-8'));
+      const completeMsg: ExtensionMessage = { type: 'exportComplete', filePath: saveUri.fsPath };
+      void panel.webview.postMessage(completeMsg);
+    } catch (err) {
+      const errMsg: ExtensionMessage = { type: 'exportError', error: formatError(err) };
+      void panel.webview.postMessage(errMsg);
+    }
+  }
+
+  private async handleExportQueryResultsXlsx(
+    panel: vscode.WebviewPanel,
+    columns: ColumnMeta[],
+    rows: Record<string, unknown>[],
+    defaultFileName: string,
+  ): Promise<void> {
+    const saveUri = await vscode.window.showSaveDialog({
+      defaultUri: vscode.Uri.file(
+        path.join(require('os').homedir(), `${defaultFileName}.xlsx`),
+      ),
+      filters: { 'Excel Files': ['xlsx'] },
+      title: 'Export Query Results as Excel',
+    });
+
+    if (!saveUri) return;
+
+    try {
+      const ExcelJS = await import('exceljs');
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Query Results');
+
+      worksheet.columns = columns.map((col) => ({
+        header: col.name,
+        key: col.name,
+        width: Math.max(col.name.length + 2, 12),
+      }));
+
+      const headerRow = worksheet.getRow(1);
+      headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      headerRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF4472C4' },
+      };
+
+      for (const row of rows) {
+        const values: Record<string, unknown> = {};
+        for (const col of columns) {
+          const val = row[col.name];
+          if (val !== null && val !== undefined && typeof val === 'object') {
+            values[col.name] = JSON.stringify(val);
+          } else {
+            values[col.name] = val;
+          }
+        }
+        worksheet.addRow(values);
+      }
+
+      if (columns.length > 0) {
+        worksheet.autoFilter = {
+          from: { row: 1, column: 1 },
+          to: { row: 1, column: columns.length },
+        };
+      }
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      await vscode.workspace.fs.writeFile(saveUri, Buffer.from(buffer as ArrayBuffer));
+
       const completeMsg: ExtensionMessage = { type: 'exportComplete', filePath: saveUri.fsPath };
       void panel.webview.postMessage(completeMsg);
     } catch (err) {

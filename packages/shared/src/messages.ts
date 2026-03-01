@@ -47,6 +47,7 @@ export type WebviewMessage =
   | { type: 'redisAddKey'; connectionId: string; key: string; keyType: string; value: string; ttl?: number }
   | { type: 'browseFile'; target: 'sqlite' | 'sshKey' }
   | { type: 'exportQueryResults'; format: 'csv' | 'json' | 'xml'; content: string; defaultFileName: string }
+  | { type: 'exportQueryResultsXlsx'; columns: ColumnMeta[]; rows: Record<string, unknown>[]; defaultFileName: string }
   | { type: 'getSchemas'; connectionId: string; database?: string }
   | { type: 'switchQueryContext'; connectionId: string; database?: string; schema?: string }
   | { type: 'documentChange'; content: string }

@@ -42,9 +42,11 @@ export class SqlEditorProvider implements vscode.CustomTextEditorProvider {
     let schema: string | undefined;
 
     if (headerMatch) {
-      // Resolve connection by name from header
+      // Resolve connection by name + type from header
       const connName = headerMatch[1];
-      const matched = connInfos.find((c) => c.name === connName);
+      const connType = headerMatch[2];
+      const matched = connInfos.find((c) => c.name === connName && c.type === connType)
+        ?? connInfos.find((c) => c.name === connName);
       if (matched) {
         connectionId = matched.id;
         database = headerMatch[3];

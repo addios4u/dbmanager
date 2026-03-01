@@ -109,38 +109,38 @@ export default function App() {
         >
           <span style={{ fontWeight: 700, fontSize: 13 }}>DB Manager</span>
           <span style={{ flex: 1 }} />
-          {connections.length > 0 && (
-            <select
-              style={{ fontSize: 12, padding: '2px 6px' }}
-              onChange={(e) => {
-                const id = e.target.value;
-                if (id) {
-                  setActiveConnection(id);
-                  setViewState({ view: 'query', connectionId: id });
-                  clear();
-                }
-              }}
-              value={
-                viewState.view !== 'welcome' && viewState.view !== 'connectionDialog'
-                  ? viewState.connectionId
-                  : ''
-              }
-            >
-              <option value="">Select connection...</option>
-              {connections.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} ({c.type})
-                </option>
-              ))}
-            </select>
+          {viewState.view !== 'query' && (
+            <>
+              {connections.length > 0 && (
+                <select
+                  style={{ fontSize: 12, padding: '2px 6px' }}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    if (id) {
+                      setActiveConnection(id);
+                      setViewState({ view: 'query', connectionId: id });
+                      clear();
+                    }
+                  }}
+                  value=""
+                >
+                  <option value="">Select connection...</option>
+                  {connections.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} ({c.type})
+                    </option>
+                  ))}
+                </select>
+              )}
+              <button
+                className="secondary"
+                style={{ fontSize: 12, padding: '2px 10px' }}
+                onClick={handleNewConnection}
+              >
+                + Add Connection
+              </button>
+            </>
           )}
-          <button
-            className="secondary"
-            style={{ fontSize: 12, padding: '2px 10px' }}
-            onClick={handleNewConnection}
-          >
-            + Add Connection
-          </button>
         </div>
       )}
 

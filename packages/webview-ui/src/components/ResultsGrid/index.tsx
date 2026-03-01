@@ -8,7 +8,14 @@ import { useQueryStore } from '../../stores/query';
 import { postMessage } from '../../vscode-api';
 import { toCSV, toJSON, toXML } from '../../utils/export';
 
-type ExportFormat = 'csv' | 'json' | 'xml';
+type ExportFormat = 'csv' | 'xlsx' | 'json' | 'xml';
+
+const formatLabels: Record<ExportFormat, string> = {
+  csv: 'CSV',
+  xlsx: 'Excel (XLSX)',
+  json: 'JSON',
+  xml: 'XML',
+};
 
 export function ResultsGrid() {
   const { columns, rows, totalRows, executionTime, error } = useResultsStore();
@@ -36,35 +43,39 @@ export function ResultsGrid() {
     return () => window.removeEventListener('message', handler);
   }, []);
 
-  // Close dropdown on outside click
-  useEffect(() => {
-    if (!showExportMenu) return;
-    const close = () => setShowExportMenu(false);
-    document.addEventListener('click', close);
-    return () => document.removeEventListener('click', close);
-  }, [showExportMenu]);
 
   const handleExport = useCallback(
     (format: ExportFormat) => {
-      let content: string;
-      switch (format) {
-        case 'csv':
-          content = toCSV(columns, rows);
-          break;
-        case 'json':
-          content = toJSON(rows);
-          break;
-        case 'xml':
-          content = toXML(columns, rows);
-          break;
-      }
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-      postMessage({
-        type: 'exportQueryResults',
-        format,
-        content,
-        defaultFileName: `query-results-${timestamp}`,
-      });
+      const defaultFileName = `query-results-${timestamp}`;
+
+      if (format === 'xlsx') {
+        postMessage({
+          type: 'exportQueryResultsXlsx',
+          columns,
+          rows,
+          defaultFileName,
+        });
+      } else {
+        let content: string;
+        switch (format) {
+          case 'csv':
+            content = toCSV(columns, rows);
+            break;
+          case 'json':
+            content = toJSON(rows);
+            break;
+          case 'xml':
+            content = toXML(columns, rows);
+            break;
+        }
+        postMessage({
+          type: 'exportQueryResults',
+          format,
+          content,
+          defaultFileName,
+        });
+      }
       setShowExportMenu(false);
     },
     [columns, rows],
@@ -181,6 +192,8 @@ export function ResultsGrid() {
           opacity: 0.7,
           borderBottom: '1px solid var(--vscode-panel-border, #333)',
           background: 'var(--vscode-editorGroupHeader-tabsBackground)',
+          position: 'relative',
+          zIndex: 10,
         }}
       >
         <span>{totalRows.toLocaleString()} rows &middot; {executionTime}ms</span>
@@ -205,46 +218,55 @@ export function ResultsGrid() {
           <button
             className="secondary"
             style={{ fontSize: 11, padding: '1px 8px', cursor: 'pointer' }}
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowExportMenu(!showExportMenu);
-            }}
+            onClick={() => setShowExportMenu(!showExportMenu)}
           >
             Export &#x25BE;
           </button>
           {showExportMenu && (
-            <div
-              style={{
-                position: 'absolute',
-                right: 0,
-                top: '100%',
-                marginTop: 2,
-                minWidth: 100,
-                background: 'var(--vscode-menu-background, var(--vscode-editorWidget-background, #252526))',
-                border: '1px solid var(--vscode-menu-border, var(--vscode-panel-border, #454545))',
-                borderRadius: 3,
-                boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-                zIndex: 1000,
-                padding: '4px 0',
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {(['csv', 'json', 'xml'] as ExportFormat[]).map((fmt) => (
-                <button
-                  key={fmt}
-                  style={menuItemStyle}
-                  onMouseEnter={(e) => {
-                    (e.target as HTMLElement).style.background = 'var(--vscode-list-hoverBackground, #2a2d2e)';
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.target as HTMLElement).style.background = 'none';
-                  }}
-                  onClick={() => handleExport(fmt)}
-                >
-                  {fmt.toUpperCase()}
-                </button>
-              ))}
-            </div>
+            <>
+              <div
+                style={{
+                  position: 'fixed',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  zIndex: 999,
+                }}
+                onClick={() => setShowExportMenu(false)}
+              />
+              <div
+                style={{
+                  position: 'absolute',
+                  right: 0,
+                  top: '100%',
+                  marginTop: 2,
+                  minWidth: 100,
+                  background: 'var(--vscode-menu-background, var(--vscode-editorWidget-background, #252526))',
+                  border: '1px solid var(--vscode-menu-border, var(--vscode-panel-border, #454545))',
+                  borderRadius: 3,
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                  zIndex: 1000,
+                  padding: '4px 0',
+                }}
+              >
+                {(['csv', 'xlsx', 'json', 'xml'] as ExportFormat[]).map((fmt) => (
+                  <button
+                    key={fmt}
+                    style={menuItemStyle}
+                    onMouseEnter={(e) => {
+                      (e.target as HTMLElement).style.background = 'var(--vscode-list-hoverBackground, #2a2d2e)';
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.target as HTMLElement).style.background = 'none';
+                    }}
+                    onClick={() => handleExport(fmt)}
+                  >
+                    {formatLabels[fmt]}
+                  </button>
+                ))}
+              </div>
+            </>
           )}
         </div>
       </div>
