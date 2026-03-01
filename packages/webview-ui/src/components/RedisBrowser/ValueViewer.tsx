@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import * as l10n from '@vscode/l10n';
 import type { RedisValue } from '@dbmanager/shared';
 import { TTLEditor } from './TTLEditor';
 
@@ -130,7 +131,7 @@ function StringValue({ value, onSave }: { value: RedisValue; onSave: (key: strin
             borderRadius: 2,
           }}
         >
-          Save
+          {l10n.t('Save')}
         </button>
       </div>
     </div>
@@ -141,7 +142,7 @@ function ListValue({ value }: { value: RedisValue }) {
   const items = Array.isArray(value.value) ? (value.value as unknown[]) : [];
   return (
     <div>
-      <div style={{ fontSize: 11, opacity: 0.7, marginBottom: 6 }}>{items.length} items</div>
+      <div style={{ fontSize: 11, opacity: 0.7, marginBottom: 6 }}>{l10n.t('{0} items', items.length)}</div>
       <ol style={{ margin: 0, paddingLeft: 24 }}>
         {items.map((item, i) => (
           <li
@@ -165,7 +166,7 @@ function SetValue({ value }: { value: RedisValue }) {
   const members = Array.isArray(value.value) ? (value.value as unknown[]) : [];
   return (
     <div>
-      <div style={{ fontSize: 11, opacity: 0.7, marginBottom: 6 }}>{members.length} members</div>
+      <div style={{ fontSize: 11, opacity: 0.7, marginBottom: 6 }}>{l10n.t('{0} members', members.length)}</div>
       <ul style={{ margin: 0, paddingLeft: 24 }}>
         {members.map((m, i) => (
           <li
@@ -195,8 +196,8 @@ function ZSetValue({ value }: { value: RedisValue }) {
     <table style={tableStyle}>
       <thead>
         <tr>
-          <th style={thStyle}>Member</th>
-          <th style={thStyle}>Score</th>
+          <th style={thStyle}>{l10n.t('Member')}</th>
+          <th style={thStyle}>{l10n.t('Score')}</th>
         </tr>
       </thead>
       <tbody>
@@ -220,8 +221,8 @@ function HashValue({ value }: { value: RedisValue }) {
     <table style={tableStyle}>
       <thead>
         <tr>
-          <th style={thStyle}>Field</th>
-          <th style={thStyle}>Value</th>
+          <th style={thStyle}>{l10n.t('Field')}</th>
+          <th style={thStyle}>{l10n.t('Value')}</th>
         </tr>
       </thead>
       <tbody>
@@ -264,7 +265,7 @@ export function ValueViewer({ value, isLoading, onSave, onDelete }: ValueViewerP
           opacity: 0.6,
         }}
       >
-        Loading...
+        {l10n.t('Loading...')}
       </div>
     );
   }
@@ -281,7 +282,7 @@ export function ValueViewer({ value, isLoading, onSave, onDelete }: ValueViewerP
           opacity: 0.6,
         }}
       >
-        Select a key to view its value
+        {l10n.t('Select a key to view its value')}
       </div>
     );
   }
@@ -334,7 +335,7 @@ export function ValueViewer({ value, isLoading, onSave, onDelete }: ValueViewerP
             borderRadius: 2,
           }}
         >
-          Delete
+          {l10n.t('Delete')}
         </button>
       </div>
     </div>

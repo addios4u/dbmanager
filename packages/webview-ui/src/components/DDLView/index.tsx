@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import * as l10n from '@vscode/l10n';
 import { postMessage } from '../../vscode-api';
 import { ContextHeader } from '../ContextHeader';
 
@@ -183,9 +184,9 @@ export function DDLView({ connectionId, table, schema }: DDLViewProps) {
             <button
               onClick={handleCopy}
               style={{ fontSize: 11, padding: '1px 8px' }}
-              title="Copy DDL to clipboard"
+              title={l10n.t('Copy DDL to clipboard')}
             >
-              Copy
+              {l10n.t('Copy')}
             </button>
           ) : undefined
         }
@@ -202,7 +203,7 @@ export function DDLView({ connectionId, table, schema }: DDLViewProps) {
             fontSize: 13,
           }}
         >
-          Loading DDL...
+          {l10n.t('Loading DDL...')}
         </div>
       ) : error ? (
         <div
@@ -214,7 +215,7 @@ export function DDLView({ connectionId, table, schema }: DDLViewProps) {
             whiteSpace: 'pre-wrap',
           }}
         >
-          <strong>Error:</strong> {error}
+          <strong>{l10n.t('Error:')}</strong> {error}
         </div>
       ) : (
         <DDLCodeBlock ddl={ddl} />

@@ -1,4 +1,5 @@
 import React from 'react';
+import * as l10n from '@vscode/l10n';
 
 interface StatusBarProps {
   children?: React.ReactNode;
@@ -42,7 +43,9 @@ export function StatusBar({ children, executionTime, rowCount, error }: StatusBa
           <span style={{ color: 'var(--vscode-descriptionForeground, #808080)', whiteSpace: 'nowrap' }}>
             {rowCount !== undefined && (
               <>
-                {rowCount.toLocaleString()} {rowCount === 1 ? 'row' : 'rows'}
+                {rowCount === 1
+                  ? l10n.t('{0} row', rowCount.toLocaleString())
+                  : l10n.t('{0} rows', rowCount.toLocaleString())}
               </>
             )}
             {rowCount !== undefined && executionTime !== undefined && ' \u00b7 '}

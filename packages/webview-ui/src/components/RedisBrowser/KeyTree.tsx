@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useCallback } from 'react';
+import * as l10n from '@vscode/l10n';
 import type { RedisKeyInfo } from '@dbmanager/shared';
 
 interface TreeNode {
@@ -142,7 +143,7 @@ function TreeNodeView({
         </span>
         {isFolder && (
           <span style={{ opacity: 0.5, fontSize: 10, flexShrink: 0 }}>
-            ({node.keyCount})
+            {l10n.t('({0})', node.keyCount)}
           </span>
         )}
         {isLeaf && node.type && (
@@ -211,7 +212,7 @@ export function KeyTree({
   if (isScanning && keys.length === 0) {
     return (
       <div style={{ padding: 16, opacity: 0.5, fontSize: 12, textAlign: 'center' }}>
-        Scanning...
+        {l10n.t('Scanning...')}
       </div>
     );
   }
@@ -219,7 +220,7 @@ export function KeyTree({
   if (keys.length === 0) {
     return (
       <div style={{ padding: 16, opacity: 0.5, fontSize: 12, textAlign: 'center' }}>
-        Click Scan to load keys
+        {l10n.t('Click Scan to load keys')}
       </div>
     );
   }
@@ -245,7 +246,7 @@ export function KeyTree({
             style={{ width: '100%', fontSize: 12 }}
             onClick={onLoadMore}
           >
-            Load more
+            {l10n.t('Load more')}
           </button>
         </div>
       )}

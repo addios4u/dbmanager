@@ -124,11 +124,11 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(COMMAND_IDS.DELETE_CONNECTION, async (node) => {
       const n = node as { connectionId: string; label: string };
       const confirm = await vscode.window.showWarningMessage(
-        `Delete connection "${n.label}"?`,
+        vscode.l10n.t('Delete connection "{0}"?', n.label),
         { modal: true },
-        'Delete',
+        vscode.l10n.t('Delete'),
       );
-      if (confirm === 'Delete') {
+      if (confirm === vscode.l10n.t('Delete')) {
         await connectionManager.deleteConnection(n.connectionId);
         treeProvider.refresh();
       }
@@ -136,15 +136,15 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(COMMAND_IDS.DROP_TABLE, async (node) => {
       const n = node as { connectionId: string; tableName: string; schema?: string; database?: string };
       const confirm = await vscode.window.showWarningMessage(
-        `Drop table "${n.tableName}"? This action cannot be undone.`,
+        vscode.l10n.t('Drop table "{0}"? This action cannot be undone.', n.tableName),
         { modal: true },
-        'Drop',
+        vscode.l10n.t('Drop'),
       );
-      if (confirm === 'Drop') {
+      if (confirm === vscode.l10n.t('Drop')) {
         try {
           const adapter = connectionManager.getAdapter(n.connectionId);
           if (!adapter || !('execute' in adapter)) {
-            vscode.window.showErrorMessage('No active connection for this table.');
+            vscode.window.showErrorMessage(vscode.l10n.t('No active connection for this table.'));
             return;
           }
           const config = connectionManager.getConnection(n.connectionId);
@@ -157,10 +157,10 @@ export function activate(context: vscode.ExtensionContext): void {
             ? `${q(n.schema)}.${q(n.tableName)}`
             : q(n.tableName);
           await adapter.execute(`DROP TABLE ${qualifiedName}`);
-          vscode.window.showInformationMessage(`Table "${n.tableName}" has been dropped.`);
+          vscode.window.showInformationMessage(vscode.l10n.t('Table "{0}" has been dropped.', n.tableName));
           treeProvider.refresh();
         } catch (err) {
-          vscode.window.showErrorMessage(`Drop table failed: ${err instanceof Error ? err.message : String(err)}`);
+          vscode.window.showErrorMessage(vscode.l10n.t('Drop table failed: {0}', err instanceof Error ? err.message : String(err)));
         }
       }
     }),
@@ -178,7 +178,7 @@ export function activate(context: vscode.ExtensionContext): void {
         }
       }
       if (!fileUri) {
-        vscode.window.showWarningMessage('No SQL file selected.');
+        vscode.window.showWarningMessage(vscode.l10n.t('No SQL file selected.'));
         return;
       }
 
@@ -188,7 +188,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(COMMAND_IDS.BACKUP_DATABASE, (node) => {
       const n = node as { connectionId: string; database?: string };
       if (!n.database) {
-        vscode.window.showErrorMessage('No database selected for backup.');
+        vscode.window.showErrorMessage(vscode.l10n.t('No database selected for backup.'));
         return;
       }
       void backupService.backupDatabase(n.connectionId, n.database);
@@ -196,7 +196,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(COMMAND_IDS.RESTORE_DATABASE, (node) => {
       const n = node as { connectionId: string; database?: string };
       if (!n.database) {
-        vscode.window.showErrorMessage('No database selected for restore.');
+        vscode.window.showErrorMessage(vscode.l10n.t('No database selected for restore.'));
         return;
       }
       void backupService.restoreDatabase(n.connectionId, n.database, () => {
@@ -207,20 +207,20 @@ export function activate(context: vscode.ExtensionContext): void {
       const n = node as { connectionId: string };
       const config = connectionManager.getConnection(n.connectionId);
       if (!config || config.type === 'sqlite' || config.type === 'redis') {
-        vscode.window.showErrorMessage('Create database is not supported for this connection type.');
+        vscode.window.showErrorMessage(vscode.l10n.t('Create database is not supported for this connection type.'));
         return;
       }
       const adapter = connectionManager.getAdapter(n.connectionId);
       if (!adapter || !('execute' in adapter)) {
-        vscode.window.showErrorMessage('No active connection.');
+        vscode.window.showErrorMessage(vscode.l10n.t('No active connection.'));
         return;
       }
       const dbName = await vscode.window.showInputBox({
-        title: 'Create Database',
-        prompt: 'Enter the new database name',
+        title: vscode.l10n.t('Create Database'),
+        prompt: vscode.l10n.t('Enter the new database name'),
         placeHolder: 'my_database',
         ignoreFocusOut: true,
-        validateInput: (v) => (v.trim() ? null : 'Database name is required'),
+        validateInput: (v) => (v.trim() ? null : vscode.l10n.t('Database name is required')),
       });
       if (!dbName) return;
       try {
@@ -228,33 +228,33 @@ export function activate(context: vscode.ExtensionContext): void {
           ? '`' + dbName.replace(/`/g, '``') + '`'
           : '"' + dbName.replace(/"/g, '""') + '"';
         await adapter.execute(`CREATE DATABASE ${q}`);
-        vscode.window.showInformationMessage(`Database "${dbName}" created.`);
+        vscode.window.showInformationMessage(vscode.l10n.t('Database "{0}" created.', dbName));
         treeProvider.refresh();
       } catch (err) {
-        vscode.window.showErrorMessage(`Create database failed: ${err instanceof Error ? err.message : String(err)}`);
+        vscode.window.showErrorMessage(vscode.l10n.t('Create database failed: {0}', err instanceof Error ? err.message : String(err)));
       }
     }),
     vscode.commands.registerCommand(COMMAND_IDS.DROP_DATABASE, async (node) => {
       const n = node as { connectionId: string; database?: string };
       if (!n.database) {
-        vscode.window.showErrorMessage('No database selected.');
+        vscode.window.showErrorMessage(vscode.l10n.t('No database selected.'));
         return;
       }
       const config = connectionManager.getConnection(n.connectionId);
       if (!config) {
-        vscode.window.showErrorMessage('Connection not found.');
+        vscode.window.showErrorMessage(vscode.l10n.t('Connection not found.'));
         return;
       }
       const confirm = await vscode.window.showWarningMessage(
-        `Drop database "${n.database}"? All data will be permanently deleted. This action cannot be undone.`,
+        vscode.l10n.t('Drop database "{0}"? All data will be permanently deleted. This action cannot be undone.', n.database),
         { modal: true },
-        'Drop',
+        vscode.l10n.t('Drop'),
       );
-      if (confirm !== 'Drop') return;
+      if (confirm !== vscode.l10n.t('Drop')) return;
       try {
         const adapter = connectionManager.getAdapter(n.connectionId);
         if (!adapter || !('execute' in adapter)) {
-          vscode.window.showErrorMessage('No active connection.');
+          vscode.window.showErrorMessage(vscode.l10n.t('No active connection.'));
           return;
         }
         const q = config.type === 'mysql' || config.type === 'mariadb'
@@ -268,10 +268,10 @@ export function activate(context: vscode.ExtensionContext): void {
           }
         }
         await adapter.execute(`DROP DATABASE ${q}`);
-        vscode.window.showInformationMessage(`Database "${n.database}" has been dropped.`);
+        vscode.window.showInformationMessage(vscode.l10n.t('Database "{0}" has been dropped.', n.database));
         treeProvider.refresh();
       } catch (err) {
-        vscode.window.showErrorMessage(`Drop database failed: ${err instanceof Error ? err.message : String(err)}`);
+        vscode.window.showErrorMessage(vscode.l10n.t('Drop database failed: {0}', err instanceof Error ? err.message : String(err)));
       }
     }),
   );

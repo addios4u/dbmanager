@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { readFileSync } from 'fs';
 import { open as fsOpen } from 'fs/promises';
 import type { FileHandle } from 'fs/promises';
 import * as path from 'path';
@@ -62,13 +63,13 @@ export class WebviewPanelManager {
 
   openQueryEditor(connectionId: string, database?: string, schema?: string): void {
     const key = `query:${connectionId}`;
-    this.showOrCreate(key, `Query — ${this.getConnectionLabel(connectionId)}`, { kind: 'query', connectionId, database, schema });
+    this.showOrCreate(key, vscode.l10n.t('Query — {0}', this.getConnectionLabel(connectionId)), { kind: 'query', connectionId, database, schema });
   }
 
   openQueryEditorWithSql(connectionId: string, sql: string, fileName?: string): void {
     const label = fileName ?? 'SQL';
     const key = `query:${connectionId}:${fileName ?? ''}`;
-    this.showOrCreate(key, `${label} — ${this.getConnectionLabel(connectionId)}`, {
+    this.showOrCreate(key, vscode.l10n.t('{0} — {1}', label, this.getConnectionLabel(connectionId)), {
       kind: 'query',
       connectionId,
       initialSql: sql,
@@ -77,29 +78,29 @@ export class WebviewPanelManager {
 
   openTableData(connectionId: string, tableName: string, schema?: string, database?: string): void {
     const key = `tableData:${connectionId}:${database ?? ''}:${schema ?? ''}:${tableName}`;
-    this.showOrCreate(key, `${tableName} — Data`, { kind: 'tableData', connectionId, tableName, schema, database });
+    this.showOrCreate(key, vscode.l10n.t('{0} — Data', tableName), { kind: 'tableData', connectionId, tableName, schema, database });
   }
 
   openConnectionDialog(editId?: string): void {
     const key = editId ? `connectionDialog:${editId}` : 'connectionDialog:new';
-    const title = editId ? 'Edit Connection' : 'New Connection';
+    const title = editId ? vscode.l10n.t('Edit Connection') : vscode.l10n.t('New Connection');
     this.showOrCreate(key, title, { kind: 'connectionDialog', editId });
   }
 
   showDDL(connectionId: string, tableName: string, schema?: string, database?: string): void {
     const key = `ddl:${connectionId}:${database ?? ''}:${schema ?? ''}:${tableName}`;
-    this.showOrCreate(key, `${tableName} — DDL`, { kind: 'ddl', connectionId, tableName, schema, database });
+    this.showOrCreate(key, vscode.l10n.t('{0} — DDL', tableName), { kind: 'ddl', connectionId, tableName, schema, database });
   }
 
   exportTable(connectionId: string, tableName: string, schema?: string, database?: string): void {
     const key = `export:${connectionId}:${database ?? ''}:${schema ?? ''}:${tableName}`;
-    this.showOrCreate(key, `${tableName} — Export`, { kind: 'export', connectionId, tableName, schema, database });
+    this.showOrCreate(key, vscode.l10n.t('{0} — Export', tableName), { kind: 'export', connectionId, tableName, schema, database });
   }
 
   openRedisBrowser(connectionId: string, db?: number): void {
     const key = `redis:${connectionId}:${db ?? 0}`;
     const label = this.getConnectionLabel(connectionId);
-    const title = db !== undefined ? `${label} — DB ${db}` : `${label} — Redis`;
+    const title = db !== undefined ? vscode.l10n.t('{0} — DB {1}', label, String(db)) : vscode.l10n.t('{0} — Redis', label);
     this.showOrCreate(key, title, { kind: 'redis', connectionId, redisDb: db });
   }
 
@@ -726,15 +727,15 @@ export class WebviewPanelManager {
     }
 
     const filterMap: Record<string, { [label: string]: string[] }> = {
-      csv: { 'CSV Files': ['csv'] },
-      json: { 'JSON Files': ['json'] },
-      sql: { 'SQL Files': ['sql'] },
+      csv: { [vscode.l10n.t('CSV Files')]: ['csv'] },
+      json: { [vscode.l10n.t('JSON Files')]: ['json'] },
+      sql: { [vscode.l10n.t('SQL Files')]: ['sql'] },
     };
 
     const saveUri = await vscode.window.showSaveDialog({
       defaultUri: vscode.Uri.file(path.join(require('os').homedir(), `${table}.${format}`)),
       filters: filterMap[format] ?? {},
-      title: `Export ${table} as ${format.toUpperCase()}`,
+      title: vscode.l10n.t('Export {0} as {1}', table, format.toUpperCase()),
     });
 
     if (!saveUri) {
@@ -850,9 +851,9 @@ export class WebviewPanelManager {
     defaultFileName: string,
   ): Promise<void> {
     const filterMap: Record<string, { [label: string]: string[] }> = {
-      csv: { 'CSV Files': ['csv'] },
-      json: { 'JSON Files': ['json'] },
-      xml: { 'XML Files': ['xml'] },
+      csv: { [vscode.l10n.t('CSV Files')]: ['csv'] },
+      json: { [vscode.l10n.t('JSON Files')]: ['json'] },
+      xml: { [vscode.l10n.t('XML Files')]: ['xml'] },
     };
 
     const saveUri = await vscode.window.showSaveDialog({
@@ -860,7 +861,7 @@ export class WebviewPanelManager {
         path.join(require('os').homedir(), `${defaultFileName}.${format}`),
       ),
       filters: filterMap[format] ?? {},
-      title: `Export Query Results as ${format.toUpperCase()}`,
+      title: vscode.l10n.t('Export Query Results as {0}', format.toUpperCase()),
     });
 
     if (!saveUri) return;
@@ -885,8 +886,8 @@ export class WebviewPanelManager {
       defaultUri: vscode.Uri.file(
         path.join(require('os').homedir(), `${defaultFileName}.xlsx`),
       ),
-      filters: { 'Excel Files': ['xlsx'] },
-      title: 'Export Query Results as Excel',
+      filters: { [vscode.l10n.t('Excel Files')]: ['xlsx'] },
+      title: vscode.l10n.t('Export Query Results as Excel'),
     });
 
     if (!saveUri) return;
@@ -943,8 +944,8 @@ export class WebviewPanelManager {
 
   private async handleSaveQueryToFile(content: string): Promise<void> {
     const saveUri = await vscode.window.showSaveDialog({
-      filters: { 'SQL Files': ['sql'] },
-      title: 'Save Query',
+      filters: { [vscode.l10n.t('SQL Files')]: ['sql'] },
+      title: vscode.l10n.t('Save Query'),
     });
     if (!saveUri) return;
     await vscode.workspace.fs.writeFile(saveUri, Buffer.from(content, 'utf-8'));
@@ -1177,14 +1178,14 @@ export class WebviewPanelManager {
             canSelectFiles: true,
             canSelectFolders: false,
             canSelectMany: false,
-            title: 'Select SQLite Database File',
-            filters: { 'SQLite Database': ['db', 'sqlite', 'sqlite3', 'db3'], 'All Files': ['*'] },
+            title: vscode.l10n.t('Select SQLite Database File'),
+            filters: { [vscode.l10n.t('SQLite Database')]: ['db', 'sqlite', 'sqlite3', 'db3'], [vscode.l10n.t('All Files')]: ['*'] },
           }
         : {
             canSelectFiles: true,
             canSelectFolders: false,
             canSelectMany: false,
-            title: 'Select SSH Private Key',
+            title: vscode.l10n.t('Select SSH Private Key'),
             defaultUri: vscode.Uri.file(require('os').homedir() + '/.ssh'),
           };
 
@@ -1224,10 +1225,13 @@ export class WebviewPanelManager {
         redisDb: meta.redisDb,
         initialSql: meta.initialSql,
       },
+      l10nContents: this.getWebviewL10nContents(),
     });
 
+    const lang = vscode.env.language || 'en';
+
     return `<!DOCTYPE html>
-<html lang="en">
+<html lang="${lang}">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1254,6 +1258,23 @@ export class WebviewPanelManager {
   <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;
+  }
+
+  private getWebviewL10nContents(): Record<string, string> | undefined {
+    const locale = vscode.env.language;
+    if (!locale || locale === 'en') return undefined;
+    const bundlePath = path.join(
+      this.context.extensionPath,
+      'dist',
+      'webview',
+      'l10n',
+      `bundle.l10n.${locale}.json`,
+    );
+    try {
+      return JSON.parse(readFileSync(bundlePath, 'utf-8')) as Record<string, string>;
+    } catch {
+      return undefined;
+    }
   }
 
   getNonce(): string {

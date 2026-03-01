@@ -181,7 +181,7 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode>
       const gen = this.disconnectGen.get(node.connectionId) ?? 0;
       item.id = `${node.connectionId}-${gen}`;
       const connected = this.connectionManager.isConnected(node.connectionId);
-      item.description = connected ? 'Connected' : '';
+      item.description = connected ? vscode.l10n.t('Connected') : '';
     }
 
     // Tooltip
@@ -201,7 +201,7 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode>
     if (node.nodeType === 'table' || node.nodeType === 'view') {
       item.command = {
         command: 'dbmanager.viewTableData',
-        title: 'View Data',
+        title: vscode.l10n.t('View Data'),
         arguments: [node],
       };
     }
@@ -210,7 +210,7 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode>
     if (node.nodeType === 'redisDb') {
       item.command = {
         command: 'dbmanager.viewRedisData',
-        title: 'Browse Keys',
+        title: vscode.l10n.t('Browse Keys'),
         arguments: [node],
       };
     }
@@ -276,7 +276,7 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode>
         await this.connectionManager.connect(node.connectionId);
       } catch (err) {
         vscode.window.showErrorMessage(
-          `Failed to connect "${config.name}": ${err instanceof Error ? err.message : String(err)}`,
+          vscode.l10n.t('Failed to connect "{0}": {1}', config.name, err instanceof Error ? err.message : String(err)),
         );
         return [];
       } finally {
@@ -305,7 +305,7 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode>
         for (const [db, count] of keycounts) {
           redisNodes.push({
             nodeType: 'redisDb',
-            label: `DB ${db} (${count.toLocaleString()} keys)`,
+            label: vscode.l10n.t('DB {0} ({1} keys)', db, count.toLocaleString()),
             connectionId: node.connectionId,
             redisDb: db,
           });
@@ -314,7 +314,7 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode>
         if (redisNodes.length === 0) {
           redisNodes.push({
             nodeType: 'redisDb',
-            label: 'DB 0 (empty)',
+            label: vscode.l10n.t('DB {0} (empty)', 0),
             connectionId: node.connectionId,
             redisDb: 0,
           });
@@ -323,7 +323,7 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode>
       } catch {
         // fallback: DB 0만 표시
         return [
-          { nodeType: 'redisDb', label: 'DB 0', connectionId: node.connectionId, redisDb: 0 },
+          { nodeType: 'redisDb', label: vscode.l10n.t('DB {0}', 0), connectionId: node.connectionId, redisDb: 0 },
           ...serverInfoNodes,
         ];
       }
@@ -345,14 +345,14 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode>
       if (config.type === 'postgresql') {
         dbNodes.push({
           nodeType: 'roleGroup',
-          label: 'Roles',
+          label: vscode.l10n.t('Roles'),
           connectionId: node.connectionId,
         });
       }
 
       return [...dbNodes, ...serverInfoNodes];
     } catch (err) {
-      vscode.window.showErrorMessage(`Failed to load databases: ${String(err)}`);
+      vscode.window.showErrorMessage(vscode.l10n.t('Failed to load databases: {0}', String(err)));
       return serverInfoNodes;
     }
   }
@@ -371,7 +371,7 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode>
         try {
           await pgAdapter.switchDatabase(node.database);
         } catch (err) {
-          vscode.window.showErrorMessage(`Failed to switch database: ${String(err)}`);
+          vscode.window.showErrorMessage(vscode.l10n.t('Failed to switch database: {0}', String(err)));
           return [];
         }
       }
@@ -379,13 +379,13 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode>
       return [
         {
           nodeType: 'schemaGroup',
-          label: 'Schemas',
+          label: vscode.l10n.t('Schemas'),
           connectionId: node.connectionId,
           database: node.database,
         },
         {
           nodeType: 'extensionGroup',
-          label: 'Extensions',
+          label: vscode.l10n.t('Extensions'),
           connectionId: node.connectionId,
           database: node.database,
         },
@@ -410,7 +410,7 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode>
         schema,
       }));
     } catch (err) {
-      vscode.window.showErrorMessage(`Failed to load schemas: ${String(err)}`);
+      vscode.window.showErrorMessage(vscode.l10n.t('Failed to load schemas: {0}', String(err)));
       return [];
     }
   }
@@ -422,7 +422,7 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode>
     if (config?.type === 'postgresql') {
       groups.push({
         nodeType: 'triggerGroup',
-        label: 'Triggers',
+        label: vscode.l10n.t('Triggers'),
         connectionId: node.connectionId,
         database: node.database,
         schema: node.schema,
@@ -435,14 +435,14 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode>
     return [
       {
         nodeType: 'tableGroup',
-        label: 'Tables',
+        label: vscode.l10n.t('Tables'),
         connectionId: node.connectionId,
         database: node.database,
         schema,
       },
       {
         nodeType: 'viewGroup',
-        label: 'Views',
+        label: vscode.l10n.t('Views'),
         connectionId: node.connectionId,
         database: node.database,
         schema,
@@ -467,7 +467,7 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode>
           tableName: t.name,
         }));
     } catch (err) {
-      vscode.window.showErrorMessage(`Failed to load ${filterType}s: ${String(err)}`);
+      vscode.window.showErrorMessage(vscode.l10n.t('Failed to load {0}s: {1}', filterType, String(err)));
       return [];
     }
   }
@@ -516,7 +516,7 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode>
 
       return [...columnNodes, ...indexNodes, ...fkNodes];
     } catch (err) {
-      vscode.window.showErrorMessage(`Failed to load table details: ${String(err)}`);
+      vscode.window.showErrorMessage(vscode.l10n.t('Failed to load table details: {0}', String(err)));
       return [];
     }
   }
@@ -526,38 +526,38 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode>
 
     // 접속 정보
     if (config.type === 'sqlite') {
-      nodes.push({ nodeType: 'serverInfo', label: `File: ${config.filepath ?? ''}`, connectionId });
+      nodes.push({ nodeType: 'serverInfo', label: vscode.l10n.t('File: {0}', config.filepath ?? ''), connectionId });
     } else {
       const host = config.host ?? 'localhost';
       const port = config.port;
       const url = port ? `${host}:${port}` : host;
-      nodes.push({ nodeType: 'serverInfo', label: `URL: ${url}`, connectionId });
+      nodes.push({ nodeType: 'serverInfo', label: vscode.l10n.t('URL: {0}', url), connectionId });
     }
 
     if (config.username) {
-      nodes.push({ nodeType: 'serverInfo', label: `User: ${config.username}`, connectionId });
+      nodes.push({ nodeType: 'serverInfo', label: vscode.l10n.t('User: {0}', config.username), connectionId });
     }
 
     if (config.ssh?.enabled) {
       const ssh = config.ssh;
       const sshUrl = `${ssh.username}@${ssh.host}:${ssh.port}`;
-      nodes.push({ nodeType: 'serverInfo', label: `SSH Tunnel: ${sshUrl}`, connectionId });
+      nodes.push({ nodeType: 'serverInfo', label: vscode.l10n.t('SSH Tunnel: {0}', sshUrl), connectionId });
     }
 
     // 서버 정보
     const versionLabel = info.productName
-      ? `${info.productName} ${info.version}`
-      : `Version: ${info.version}`;
+      ? vscode.l10n.t('{0} {1}', info.productName, info.version)
+      : vscode.l10n.t('Version: {0}', info.version);
     nodes.push({ nodeType: 'serverInfo', label: versionLabel, connectionId });
 
     if (info.charset) {
-      nodes.push({ nodeType: 'serverInfo', label: `Charset: ${info.charset}`, connectionId });
+      nodes.push({ nodeType: 'serverInfo', label: vscode.l10n.t('Charset: {0}', info.charset), connectionId });
     }
 
     if (info.uptime !== undefined) {
       nodes.push({
         nodeType: 'serverInfo',
-        label: `Uptime: ${this.formatUptime(info.uptime)}`,
+        label: vscode.l10n.t('Uptime: {0}', this.formatUptime(info.uptime)),
         connectionId,
       });
     }
@@ -600,7 +600,7 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode>
         schema: node.schema,
       }));
     } catch (err) {
-      vscode.window.showErrorMessage(`Failed to load triggers: ${String(err)}`);
+      vscode.window.showErrorMessage(vscode.l10n.t('Failed to load triggers: {0}', String(err)));
       return [];
     }
   }
@@ -620,7 +620,7 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode>
         database: node.database,
       }));
     } catch (err) {
-      vscode.window.showErrorMessage(`Failed to load extensions: ${String(err)}`);
+      vscode.window.showErrorMessage(vscode.l10n.t('Failed to load extensions: {0}', String(err)));
       return [];
     }
   }
@@ -645,7 +645,7 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode>
         };
       });
     } catch (err) {
-      vscode.window.showErrorMessage(`Failed to load roles: ${String(err)}`);
+      vscode.window.showErrorMessage(vscode.l10n.t('Failed to load roles: {0}', String(err)));
       return [];
     }
   }
@@ -665,7 +665,7 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode>
         redisKey: key,
       }));
     } catch (err) {
-      vscode.window.showErrorMessage(`Failed to scan Redis keys: ${String(err)}`);
+      vscode.window.showErrorMessage(vscode.l10n.t('Failed to scan Redis keys: {0}', String(err)));
       return [];
     }
   }

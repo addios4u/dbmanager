@@ -1,4 +1,5 @@
 import React, { useCallback, useState } from 'react';
+import * as l10n from '@vscode/l10n';
 
 interface TTLEditorProps {
   ttl: number;
@@ -34,7 +35,7 @@ export function TTLEditor({ ttl, onSetTTL }: TTLEditorProps) {
     [handleSet, handleCancel],
   );
 
-  const displayText = ttl === -1 ? 'No expiry' : `TTL: ${ttl}s`;
+  const displayText = ttl === -1 ? l10n.t('No expiry') : l10n.t('TTL: {0}s', ttl);
 
   if (editing) {
     return (
@@ -68,7 +69,7 @@ export function TTLEditor({ ttl, onSetTTL }: TTLEditorProps) {
             borderRadius: 2,
           }}
         >
-          Set
+          {l10n.t('Set')}
         </button>
         <button
           onClick={handleCancel}
@@ -82,7 +83,7 @@ export function TTLEditor({ ttl, onSetTTL }: TTLEditorProps) {
             borderRadius: 2,
           }}
         >
-          Cancel
+          {l10n.t('Cancel')}
         </button>
       </span>
     );
@@ -91,7 +92,7 @@ export function TTLEditor({ ttl, onSetTTL }: TTLEditorProps) {
   return (
     <span
       onClick={handleClick}
-      title="Click to edit TTL"
+      title={l10n.t('Click to edit TTL')}
       style={{
         fontSize: 11,
         opacity: 0.7,

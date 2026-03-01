@@ -1,0 +1,23 @@
+{
+  "viewName.connections": "DBManager - Connections",
+  "command.addConnection": "Add Connection",
+  "command.editConnection": "Edit Connection",
+  "command.deleteConnection": "Delete Connection",
+  "command.connect": "Connect",
+  "command.disconnect": "Disconnect",
+  "command.newQuery": "New Query",
+  "command.viewTableData": "View Data",
+  "command.editTableData": "Edit Data",
+  "command.showDDL": "Show DDL",
+  "command.exportTable": "Export",
+  "command.refresh": "Refresh",
+  "command.dropTable": "Drop Table",
+  "command.viewRedisData": "Browse Keys",
+  "command.openSqlFile": "Open in DB Manager Query",
+  "command.backupDatabase": "Backup Database",
+  "command.restoreDatabase": "Restore Database",
+  "command.createDatabase": "Create Database",
+  "command.dropDatabase": "Drop Database",
+  "customEditor.sqlEditor": "DB Manager Query",
+  "category.dbManager": "DB Manager"
+}

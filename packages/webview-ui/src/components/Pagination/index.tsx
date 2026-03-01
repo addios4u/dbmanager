@@ -1,4 +1,5 @@
 import React from 'react';
+import * as l10n from '@vscode/l10n';
 
 interface PaginationProps {
   totalRows: number;
@@ -55,38 +56,38 @@ export function Pagination({
       }}
     >
       <span style={{ color: 'var(--vscode-descriptionForeground, #808080)', whiteSpace: 'nowrap' }}>
-        Rows {start.toLocaleString()}{'\u2013'}{end.toLocaleString()} of {totalRows.toLocaleString()}
+        {l10n.t('Rows {0}–{1} of {2}', start.toLocaleString(), end.toLocaleString(), totalRows.toLocaleString())}
       </span>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <span
           style={navStyle(isFirst)}
           onClick={isFirst ? undefined : goToFirst}
-          title="First page"
+          title={l10n.t('First page')}
         >
           {'«'}
         </span>
         <span
           style={navStyle(isFirst)}
           onClick={isFirst ? undefined : goToPrev}
-          title="Previous page"
+          title={l10n.t('Previous page')}
         >
           {'‹'}
         </span>
         <span style={{ whiteSpace: 'nowrap' }}>
-          Page {currentPage} of {totalPages}
+          {l10n.t('Page {0} of {1}', currentPage, totalPages)}
         </span>
         <span
           style={navStyle(isLast)}
           onClick={isLast ? undefined : goToNext}
-          title="Next page"
+          title={l10n.t('Next page')}
         >
           {'›'}
         </span>
         <span
           style={navStyle(isLast)}
           onClick={isLast ? undefined : goToLast}
-          title="Last page"
+          title={l10n.t('Last page')}
         >
           {'»'}
         </span>

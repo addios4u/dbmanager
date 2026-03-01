@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import * as l10n from '@vscode/l10n';
 import { AgGridReact } from 'ag-grid-react';
 import type { ColDef, SortChangedEvent, CellDoubleClickedEvent } from 'ag-grid-community';
 import 'ag-grid-community/styles/ag-grid.css';
@@ -79,7 +80,7 @@ export function TableDataView({ connectionId, table, schema, database }: TableDa
           setStatusError(undefined);
           fetchData({ offset });
         } else {
-          setStatusError(msg.error ?? 'Save failed.');
+          setStatusError(msg.error ?? l10n.t('Save failed.'));
         }
       }
     };
@@ -263,7 +264,7 @@ export function TableDataView({ connectionId, table, schema, database }: TableDa
           fontSize: 12,
         }}
       >
-        <span style={{ opacity: 0.6, flexShrink: 0, fontWeight: 600 }}>WHERE</span>
+        <span style={{ opacity: 0.6, flexShrink: 0, fontWeight: 600 }}>{l10n.t('WHERE')}</span>
         <input
           type="text"
           value={whereClause}
@@ -282,7 +283,7 @@ export function TableDataView({ connectionId, table, schema, database }: TableDa
           onClick={handleApplyWhere}
           style={{ fontSize: 11, padding: '2px 8px' }}
         >
-          Apply
+          {l10n.t('Apply')}
         </button>
         {appliedWhere && (
           <button
@@ -290,7 +291,7 @@ export function TableDataView({ connectionId, table, schema, database }: TableDa
             onClick={handleClearWhere}
             style={{ fontSize: 11, padding: '2px 8px' }}
           >
-            Clear
+            {l10n.t('Clear')}
           </button>
         )}
       </div>
@@ -344,7 +345,7 @@ export function TableDataView({ connectionId, table, schema, database }: TableDa
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-              <span style={{ fontWeight: 700, fontSize: 13 }}>Edit Cell</span>
+              <span style={{ fontWeight: 700, fontSize: 13 }}>{l10n.t('Edit Cell')}</span>
               <span style={{
                 fontSize: 10,
                 padding: '1px 6px',
@@ -355,7 +356,7 @@ export function TableDataView({ connectionId, table, schema, database }: TableDa
                 {editingCell.columnType}
               </span>
               {editingCell.nullable && (
-                <span style={{ fontSize: 10, opacity: 0.6 }}>nullable</span>
+                <span style={{ fontSize: 10, opacity: 0.6 }}>{l10n.t('nullable')}</span>
               )}
             </div>
             <div style={{ fontSize: 12, marginBottom: 8, opacity: 0.7 }}>
@@ -389,7 +390,7 @@ export function TableDataView({ connectionId, table, schema, database }: TableDa
                     cursor: 'pointer',
                   }}
                 >
-                  TRUE
+                  {l10n.t('TRUE')}
                 </button>
                 <button
                   onClick={() => setEditValue('false')}
@@ -405,7 +406,7 @@ export function TableDataView({ connectionId, table, schema, database }: TableDa
                     cursor: 'pointer',
                   }}
                 >
-                  FALSE
+                  {l10n.t('FALSE')}
                 </button>
               </div>
             ) : (
@@ -416,7 +417,7 @@ export function TableDataView({ connectionId, table, schema, database }: TableDa
                   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSaveCell(); }
                   if (e.key === 'Escape') setEditingCell(null);
                 }}
-                placeholder={editingCell.nullable ? 'Empty = NULL' : 'Enter value...'}
+                placeholder={editingCell.nullable ? l10n.t('Empty = NULL') : l10n.t('Enter value...')}
                 rows={3}
                 autoFocus
                 style={{
@@ -442,7 +443,7 @@ export function TableDataView({ connectionId, table, schema, database }: TableDa
                   disabled={isSaving}
                   style={{ fontSize: 11, padding: '3px 10px', marginRight: 'auto' }}
                 >
-                  Set NULL
+                  {l10n.t('Set NULL')}
                 </button>
               )}
               <button
@@ -451,14 +452,14 @@ export function TableDataView({ connectionId, table, schema, database }: TableDa
                 disabled={isSaving}
                 style={{ fontSize: 11, padding: '3px 10px' }}
               >
-                Cancel
+                {l10n.t('Cancel')}
               </button>
               <button
                 onClick={handleSaveCell}
                 disabled={isSaving}
                 style={{ fontSize: 11, padding: '3px 10px' }}
               >
-                {isSaving ? 'Saving...' : 'Save'}
+                {isSaving ? l10n.t('Saving...') : l10n.t('Save')}
               </button>
             </div>
           </div>

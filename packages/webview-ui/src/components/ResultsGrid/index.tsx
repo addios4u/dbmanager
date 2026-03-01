@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import * as l10n from '@vscode/l10n';
 import { AgGridReact } from 'ag-grid-react';
 import type { ColDef } from 'ag-grid-community';
 import 'ag-grid-community/styles/ag-grid.css';
@@ -12,7 +13,7 @@ type ExportFormat = 'csv' | 'xlsx' | 'json' | 'xml';
 
 const formatLabels: Record<ExportFormat, string> = {
   csv: 'CSV',
-  xlsx: 'Excel (XLSX)',
+  xlsx: l10n.t('Excel (XLSX)'),
   json: 'JSON',
   xml: 'XML',
 };
@@ -32,10 +33,10 @@ export function ResultsGrid() {
     const handler = (event: MessageEvent) => {
       const msg = event.data;
       if (msg?.type === 'exportComplete') {
-        setExportStatus({ type: 'success', text: `Exported: ${msg.filePath as string}` });
+        setExportStatus({ type: 'success', text: l10n.t('Export complete: {0}', msg.filePath as string) });
         setTimeout(() => setExportStatus(null), 5000);
       } else if (msg?.type === 'exportError') {
-        setExportStatus({ type: 'error', text: `Export failed: ${msg.error as string}` });
+        setExportStatus({ type: 'error', text: l10n.t('Export failed: {0}', msg.error as string) });
         setTimeout(() => setExportStatus(null), 5000);
       }
     };
@@ -131,7 +132,7 @@ export function ResultsGrid() {
           opacity: 0.7,
         }}
       >
-        Executing query...
+        {l10n.t('Executing query...')}
       </div>
     );
   }
@@ -147,7 +148,7 @@ export function ResultsGrid() {
           whiteSpace: 'pre-wrap',
         }}
       >
-        <strong>Error:</strong> {error}
+        <strong>{l10n.t('Error:')}</strong> {error}
       </div>
     );
   }
@@ -164,7 +165,7 @@ export function ResultsGrid() {
           opacity: 0.5,
         }}
       >
-        Run a query to see results
+        {l10n.t('Run a query to see results')}
       </div>
     );
   }
@@ -220,7 +221,7 @@ export function ResultsGrid() {
             style={{ fontSize: 11, padding: '1px 8px', cursor: 'pointer' }}
             onClick={() => setShowExportMenu(!showExportMenu)}
           >
-            Export &#x25BE;
+            {l10n.t('Export')} &#x25BE;
           </button>
           {showExportMenu && (
             <>

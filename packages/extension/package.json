@@ -25,115 +25,116 @@
     "sql"
   ],
   "main": "./dist/extension.js",
+  "l10n": "./l10n",
   "activationEvents": [],
   "contributes": {
     "views": {
       "explorer": [
         {
           "id": "dbmanager.connections",
-          "name": "DBManager - Connections"
+          "name": "%viewName.connections%"
         }
       ]
     },
     "commands": [
       {
         "command": "dbmanager.addConnection",
-        "title": "Add Connection",
+        "title": "%command.addConnection%",
         "icon": "$(add)",
-        "category": "DB Manager"
+        "category": "%category.dbManager%"
       },
       {
         "command": "dbmanager.editConnection",
-        "title": "Edit Connection",
-        "category": "DB Manager"
+        "title": "%command.editConnection%",
+        "category": "%category.dbManager%"
       },
       {
         "command": "dbmanager.deleteConnection",
-        "title": "Delete Connection",
-        "category": "DB Manager"
+        "title": "%command.deleteConnection%",
+        "category": "%category.dbManager%"
       },
       {
         "command": "dbmanager.connect",
-        "title": "Connect",
+        "title": "%command.connect%",
         "icon": "$(plug)",
-        "category": "DB Manager"
+        "category": "%category.dbManager%"
       },
       {
         "command": "dbmanager.disconnect",
-        "title": "Disconnect",
+        "title": "%command.disconnect%",
         "icon": "$(debug-disconnect)",
-        "category": "DB Manager"
+        "category": "%category.dbManager%"
       },
       {
         "command": "dbmanager.newQuery",
-        "title": "New Query",
+        "title": "%command.newQuery%",
         "icon": "$(file-code)",
-        "category": "DB Manager"
+        "category": "%category.dbManager%"
       },
       {
         "command": "dbmanager.viewTableData",
-        "title": "View Data",
+        "title": "%command.viewTableData%",
         "icon": "$(table)",
-        "category": "DB Manager"
+        "category": "%category.dbManager%"
       },
       {
         "command": "dbmanager.editTableData",
-        "title": "Edit Data",
-        "category": "DB Manager"
+        "title": "%command.editTableData%",
+        "category": "%category.dbManager%"
       },
       {
         "command": "dbmanager.showDDL",
-        "title": "Show DDL",
-        "category": "DB Manager"
+        "title": "%command.showDDL%",
+        "category": "%category.dbManager%"
       },
       {
         "command": "dbmanager.exportTable",
-        "title": "Export",
+        "title": "%command.exportTable%",
         "icon": "$(export)",
-        "category": "DB Manager"
+        "category": "%category.dbManager%"
       },
       {
         "command": "dbmanager.refresh",
-        "title": "Refresh",
+        "title": "%command.refresh%",
         "icon": "$(refresh)",
-        "category": "DB Manager"
+        "category": "%category.dbManager%"
       },
       {
         "command": "dbmanager.dropTable",
-        "title": "Drop Table",
-        "category": "DB Manager"
+        "title": "%command.dropTable%",
+        "category": "%category.dbManager%"
       },
       {
         "command": "dbmanager.viewRedisData",
-        "title": "Browse Keys",
+        "title": "%command.viewRedisData%",
         "icon": "$(database)",
-        "category": "DB Manager"
+        "category": "%category.dbManager%"
       },
       {
         "command": "dbmanager.openSqlFile",
-        "title": "Open in DB Manager Query",
+        "title": "%command.openSqlFile%",
         "icon": "$(play)",
-        "category": "DB Manager"
+        "category": "%category.dbManager%"
       },
       {
         "command": "dbmanager.backupDatabase",
-        "title": "Backup Database",
-        "category": "DB Manager"
+        "title": "%command.backupDatabase%",
+        "category": "%category.dbManager%"
       },
       {
         "command": "dbmanager.restoreDatabase",
-        "title": "Restore Database",
-        "category": "DB Manager"
+        "title": "%command.restoreDatabase%",
+        "category": "%category.dbManager%"
       },
       {
         "command": "dbmanager.createDatabase",
-        "title": "Create Database",
-        "category": "DB Manager"
+        "title": "%command.createDatabase%",
+        "category": "%category.dbManager%"
       },
       {
         "command": "dbmanager.dropDatabase",
-        "title": "Drop Database",
-        "category": "DB Manager"
+        "title": "%command.dropDatabase%",
+        "category": "%category.dbManager%"
       }
     ],
     "menus": {
@@ -259,7 +260,7 @@
     "customEditors": [
       {
         "viewType": "dbmanager.sqlEditor",
-        "displayName": "DB Manager Query",
+        "displayName": "%customEditor.sqlEditor%",
         "selector": [
           {
             "filenamePattern": "*.sql"

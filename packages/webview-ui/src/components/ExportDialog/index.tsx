@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import * as l10n from '@vscode/l10n';
 import { postMessage } from '../../vscode-api';
 import { ContextHeader } from '../ContextHeader';
 import type { ExportOptions } from '@dbmanager/shared';
@@ -31,7 +32,7 @@ export function ExportDialog({ connectionId, table, schema }: ExportDialogProps)
       } else if (msg?.type === 'exportComplete') {
         setIsExporting(false);
         setProgress(100);
-        setResultMessage({ type: 'success', text: `Export complete: ${msg.filePath as string}` });
+        setResultMessage({ type: 'success', text: l10n.t('Export complete: {0}', msg.filePath as string) });
       } else if (msg?.type === 'exportError') {
         setIsExporting(false);
         setProgress(0);
@@ -97,7 +98,7 @@ export function ExportDialog({ connectionId, table, schema }: ExportDialogProps)
         connectionId={connectionId}
         schema={schema}
         table={table}
-        extraInfo="Export"
+        extraInfo={l10n.t('Export')}
       />
       <div
         style={{
@@ -111,7 +112,7 @@ export function ExportDialog({ connectionId, table, schema }: ExportDialogProps)
       >
         {/* Format selection */}
         <div style={sectionStyle}>
-          <div style={sectionTitleStyle}>Format</div>
+          <div style={sectionTitleStyle}>{l10n.t('Format')}</div>
           {(['csv', 'json', 'sql'] as ExportFormat[]).map((f) => (
             <label key={f} style={labelStyle}>
               <input
@@ -136,7 +137,7 @@ export function ExportDialog({ connectionId, table, schema }: ExportDialogProps)
         {/* Format-specific options */}
         {format === 'csv' && (
           <div style={sectionStyle}>
-            <div style={sectionTitleStyle}>CSV Options</div>
+            <div style={sectionTitleStyle}>{l10n.t('CSV Options')}</div>
             <label style={labelStyle}>
               <input
                 type="checkbox"
@@ -144,19 +145,19 @@ export function ExportDialog({ connectionId, table, schema }: ExportDialogProps)
                 onChange={(e) => setIncludeHeaders(e.target.checked)}
                 style={{ accentColor: 'var(--vscode-focusBorder)', cursor: 'pointer' }}
               />
-              Include headers
+              {l10n.t('Include headers')}
             </label>
             <label style={{ ...labelStyle, marginTop: 8 }}>
-              <span style={{ minWidth: 80 }}>Delimiter</span>
+              <span style={{ minWidth: 80 }}>{l10n.t('Delimiter')}</span>
               <select
                 value={delimiter}
                 onChange={(e) => setDelimiter(e.target.value)}
                 style={{ width: 100 }}
               >
-                <option value=",">Comma (,)</option>
-                <option value=";">Semicolon (;)</option>
-                <option value="\t">Tab</option>
-                <option value="|">Pipe (|)</option>
+                <option value=",">{l10n.t('Comma (,)')}</option>
+                <option value=";">{l10n.t('Semicolon (;)')}</option>
+                <option value="\t">{l10n.t('Tab')}</option>
+                <option value="|">{l10n.t('Pipe (|)')}</option>
               </select>
             </label>
           </div>
@@ -164,7 +165,7 @@ export function ExportDialog({ connectionId, table, schema }: ExportDialogProps)
 
         {format === 'json' && (
           <div style={sectionStyle}>
-            <div style={sectionTitleStyle}>JSON Options</div>
+            <div style={sectionTitleStyle}>{l10n.t('JSON Options')}</div>
             <label style={labelStyle}>
               <input
                 type="checkbox"
@@ -172,14 +173,14 @@ export function ExportDialog({ connectionId, table, schema }: ExportDialogProps)
                 onChange={(e) => setPrettyPrint(e.target.checked)}
                 style={{ accentColor: 'var(--vscode-focusBorder)', cursor: 'pointer' }}
               />
-              Pretty print
+              {l10n.t('Pretty print')}
             </label>
           </div>
         )}
 
         {format === 'sql' && (
           <div style={sectionStyle}>
-            <div style={sectionTitleStyle}>SQL Options</div>
+            <div style={sectionTitleStyle}>{l10n.t('SQL Options')}</div>
             <label style={labelStyle}>
               <input
                 type="checkbox"
@@ -187,7 +188,7 @@ export function ExportDialog({ connectionId, table, schema }: ExportDialogProps)
                 onChange={(e) => setIncludeDropStatement(e.target.checked)}
                 style={{ accentColor: 'var(--vscode-focusBorder)', cursor: 'pointer' }}
               />
-              Include DROP TABLE statement
+              {l10n.t('Include DROP TABLE statement')}
             </label>
           </div>
         )}
@@ -227,10 +228,10 @@ export function ExportDialog({ connectionId, table, schema }: ExportDialogProps)
             disabled={isExporting}
             style={{ opacity: isExporting ? 0.5 : 1 }}
           >
-            {isExporting ? 'Exporting...' : 'Export'}
+            {isExporting ? l10n.t('Exporting...') : l10n.t('Export')}
           </button>
           <button className="secondary" onClick={handleCancel}>
-            Cancel
+            {l10n.t('Cancel')}
           </button>
         </div>
 

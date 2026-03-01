@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect } from 'react';
+import * as l10n from '@vscode/l10n';
 import type { DatabaseType } from '@dbmanager/shared';
 import { useConnectionStore } from '../../stores/connection';
 import { useQueryStore } from '../../stores/query';
@@ -140,9 +141,9 @@ export function QueryContextSelector({ connectionId, onConnectionChange }: Query
 
       {/* Connection Selector */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-        <span style={labelStyle}>Connection</span>
+        <span style={labelStyle}>{l10n.t('Connection')}</span>
         <select style={selectStyle} value={connectionId} onChange={handleConnectionChange}>
-          {!connectionId && <option value="">Select connection...</option>}
+          {!connectionId && <option value="">{l10n.t('Select connection...')}</option>}
           {sqlConnections.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
@@ -154,7 +155,7 @@ export function QueryContextSelector({ connectionId, onConnectionChange }: Query
       {/* Database Selector */}
       {databases.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-          <span style={labelStyle}>Database</span>
+          <span style={labelStyle}>{l10n.t('Database')}</span>
           <select style={selectStyle} value={database ?? ''} onChange={handleDatabaseChange}>
             <option value="">—</option>
             {databases.map((db) => (
@@ -169,7 +170,7 @@ export function QueryContextSelector({ connectionId, onConnectionChange }: Query
       {/* Schema Selector (PostgreSQL only) */}
       {dbType === 'postgresql' && schemas.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-          <span style={labelStyle}>Schema</span>
+          <span style={labelStyle}>{l10n.t('Schema')}</span>
           <select style={selectStyle} value={schema ?? ''} onChange={handleSchemaChange}>
             <option value="">—</option>
             {schemas.map((s) => (

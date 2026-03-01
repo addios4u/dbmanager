@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import * as l10n from '@vscode/l10n';
 import type { PanelMeta, ViewState } from '@dbmanager/shared';
 import { postMessage } from './vscode-api';
 import { useConnectionStore } from './stores/connection';
@@ -124,7 +125,7 @@ export default function App() {
                   }}
                   value=""
                 >
-                  <option value="">Select connection...</option>
+                  <option value="">{l10n.t('Select connection...')}</option>
                   {connections.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name} ({c.type})
@@ -137,7 +138,7 @@ export default function App() {
                 style={{ fontSize: 12, padding: '2px 10px' }}
                 onClick={handleNewConnection}
               >
-                + Add Connection
+                {l10n.t('+ Add Connection')}
               </button>
             </>
           )}

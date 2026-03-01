@@ -1,0 +1,23 @@
+{
+  "viewName.connections": "DBManager - 연결",
+  "command.addConnection": "연결 추가",
+  "command.editConnection": "연결 편집",
+  "command.deleteConnection": "연결 삭제",
+  "command.connect": "연결",
+  "command.disconnect": "연결 해제",
+  "command.newQuery": "새 쿼리",
+  "command.viewTableData": "데이터 보기",
+  "command.editTableData": "데이터 편집",
+  "command.showDDL": "DDL 보기",
+  "command.exportTable": "내보내기",
+  "command.refresh": "새로 고침",
+  "command.dropTable": "테이블 삭제",
+  "command.viewRedisData": "키 탐색",
+  "command.openSqlFile": "DB Manager 쿼리에서 열기",
+  "command.backupDatabase": "데이터베이스 백업",
+  "command.restoreDatabase": "데이터베이스 복원",
+  "command.createDatabase": "데이터베이스 생성",
+  "command.dropDatabase": "데이터베이스 삭제",
+  "customEditor.sqlEditor": "DB Manager 쿼리",
+  "category.dbManager": "DB Manager"
+}

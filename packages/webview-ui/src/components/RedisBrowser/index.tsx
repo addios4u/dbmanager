@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import * as l10n from '@vscode/l10n';
 import type { ExtensionMessage } from '@dbmanager/shared';
 import { postMessage } from '../../vscode-api';
 import { useRedisStore } from '../../stores/redis';
@@ -98,7 +99,7 @@ export function RedisBrowser({ connectionId, db }: RedisBrowserProps) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <ContextHeader connectionId={connectionId} extraInfo={`Redis DB ${currentDb}`} />
+      <ContextHeader connectionId={connectionId} extraInfo={l10n.t('Redis DB {0}', currentDb)} />
 
       {/* Toolbar */}
       <div style={{
@@ -108,7 +109,7 @@ export function RedisBrowser({ connectionId, db }: RedisBrowserProps) {
         flexShrink: 0, flexWrap: 'wrap',
       }}>
         <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
-          DB:
+          {l10n.t('DB:')}
           <select
             value={currentDb}
             onChange={(e) => handleDbChange(parseInt(e.target.value, 10))}
@@ -124,18 +125,18 @@ export function RedisBrowser({ connectionId, db }: RedisBrowserProps) {
           value={pattern}
           onChange={(e) => setPattern(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleScan()}
-          placeholder="Pattern (e.g. user:*)"
+          placeholder={l10n.t('Pattern (e.g. user:*)')}
           style={{ flex: 1, minWidth: 100, fontSize: 12, padding: '2px 6px' }}
         />
         <button onClick={() => handleScan()} style={{ fontSize: 12, padding: '2px 10px' }}>
-          Scan
+          {l10n.t('Scan')}
         </button>
         <button
           className="secondary"
           onClick={() => setShowAddForm(!showAddForm)}
           style={{ fontSize: 12, padding: '2px 10px' }}
         >
-          + Add Key
+          {l10n.t('+ Add Key')}
         </button>
         <button
           className="secondary"
@@ -143,7 +144,7 @@ export function RedisBrowser({ connectionId, db }: RedisBrowserProps) {
           disabled={!selectedKey}
           style={{ fontSize: 12, padding: '2px 10px' }}
         >
-          Delete
+          {l10n.t('Delete')}
         </button>
       </div>
 
@@ -160,7 +161,7 @@ export function RedisBrowser({ connectionId, db }: RedisBrowserProps) {
             type="text"
             value={newKey}
             onChange={(e) => setNewKey(e.target.value)}
-            placeholder="Key name"
+            placeholder={l10n.t('Key name')}
             style={{ fontSize: 12, padding: '2px 6px', width: 150 }}
           />
           <select
@@ -177,21 +178,21 @@ export function RedisBrowser({ connectionId, db }: RedisBrowserProps) {
             type="text"
             value={newValue}
             onChange={(e) => setNewValue(e.target.value)}
-            placeholder="Value"
+            placeholder={l10n.t('Value')}
             style={{ flex: 1, minWidth: 80, fontSize: 12, padding: '2px 6px' }}
           />
           <input
             type="number"
             value={newTTL}
             onChange={(e) => setNewTTL(e.target.value)}
-            placeholder="TTL (s)"
+            placeholder={l10n.t('TTL (s)')}
             style={{ width: 70, fontSize: 12, padding: '2px 6px' }}
           />
           <button onClick={handleAddKey} style={{ fontSize: 12, padding: '2px 10px' }}>
-            Add
+            {l10n.t('Add')}
           </button>
           <button className="secondary" onClick={() => setShowAddForm(false)} style={{ fontSize: 12, padding: '2px 10px' }}>
-            Cancel
+            {l10n.t('Cancel')}
           </button>
         </div>
       )}

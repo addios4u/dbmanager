@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
+import * as l10n from '@vscode/l10n';
 import type { DatabaseType, ConnectionConfig, SshConfig } from '@dbmanager/shared';
 import { postMessage } from '../../vscode-api';
 import { useConnectionStore } from '../../stores/connection';
@@ -199,7 +200,7 @@ export function ConnectionDialog({ editId, onClose }: ConnectionDialogProps) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: 24, overflowY: 'auto' }}>
       <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>
-        {editId ? 'Edit Connection' : 'New Connection'}
+        {editId ? l10n.t('Edit Connection') : l10n.t('New Connection')}
       </h2>
 
       {/* Two-column grid */}
@@ -207,21 +208,21 @@ export function ConnectionDialog({ editId, onClose }: ConnectionDialogProps) {
 
         {/* Left Panel — Connection Settings */}
         <div style={panelStyle}>
-          <h3 style={sectionTitleStyle}>Connection</h3>
+          <h3 style={sectionTitleStyle}>{l10n.t('Connection')}</h3>
 
           <label style={labelStyle}>
-            <span>Name *</span>
+            <span>{l10n.t('Name *')}</span>
             <input
               type="text"
               value={form.name}
               onChange={(e) => handleField('name', e.target.value)}
-              placeholder="My Database"
+              placeholder={l10n.t('My Database')}
               style={inputStyle}
             />
           </label>
 
           <label style={labelStyle}>
-            <span>Type</span>
+            <span>{l10n.t('Type')}</span>
             <select
               value={form.type}
               onChange={(e) => handleTypeChange(e.target.value as DatabaseType)}
@@ -237,13 +238,13 @@ export function ConnectionDialog({ editId, onClose }: ConnectionDialogProps) {
 
           {isSqliteType ? (
             <label style={labelStyle}>
-              <span>File Path *</span>
+              <span>{l10n.t('File Path *')}</span>
               <div style={{ display: 'flex', gap: 4 }}>
                 <input
                   type="text"
                   value={form.filepath ?? ''}
                   onChange={(e) => handleField('filepath', e.target.value)}
-                  placeholder="/path/to/database.db"
+                  placeholder={l10n.t('/path/to/database.db')}
                   style={{ ...inputStyle, flex: 1 }}
                 />
                 <button
@@ -252,25 +253,25 @@ export function ConnectionDialog({ editId, onClose }: ConnectionDialogProps) {
                   onClick={() => postMessage({ type: 'browseFile', target: 'sqlite' })}
                   style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
                 >
-                  Browse...
+                  {l10n.t('Browse...')}
                 </button>
               </div>
             </label>
           ) : (
             <>
               <label style={labelStyle}>
-                <span>Host</span>
+                <span>{l10n.t('Host')}</span>
                 <input
                   type="text"
                   value={form.host ?? ''}
                   onChange={(e) => handleField('host', e.target.value)}
-                  placeholder="localhost"
+                  placeholder={l10n.t('localhost')}
                   style={inputStyle}
                 />
               </label>
 
               <label style={labelStyle}>
-                <span>Port</span>
+                <span>{l10n.t('Port')}</span>
                 <input
                   type="number"
                   value={form.port ?? DEFAULT_PORTS[form.type]}
@@ -281,36 +282,36 @@ export function ConnectionDialog({ editId, onClose }: ConnectionDialogProps) {
 
               {!isRedisType && (
                 <label style={labelStyle}>
-                  <span>Username</span>
+                  <span>{l10n.t('Username')}</span>
                   <input
                     type="text"
                     value={form.username ?? ''}
                     onChange={(e) => handleField('username', e.target.value)}
-                    placeholder="root"
+                    placeholder={l10n.t('root')}
                     style={inputStyle}
                   />
                 </label>
               )}
 
               <label style={labelStyle}>
-                <span>Password</span>
+                <span>{l10n.t('Password')}</span>
                 <input
                   type="password"
                   value={form.password}
                   onChange={(e) => handleField('password', e.target.value)}
-                  placeholder={editId ? '(unchanged)' : ''}
+                  placeholder={editId ? l10n.t('(unchanged)') : ''}
                   style={inputStyle}
                 />
               </label>
 
               {!isRedisType && (
                 <label style={labelStyle}>
-                  <span>Database</span>
+                  <span>{l10n.t('Database')}</span>
                   <input
                     type="text"
                     value={form.database ?? ''}
                     onChange={(e) => handleField('database', e.target.value)}
-                    placeholder="mydb"
+                    placeholder={l10n.t('mydb')}
                     style={inputStyle}
                   />
                 </label>
@@ -323,24 +324,24 @@ export function ConnectionDialog({ editId, onClose }: ConnectionDialogProps) {
                   onChange={(e) => handleField('ssl', e.target.checked)}
                   style={{ width: 'auto' }}
                 />
-                <span>{isRedisType ? 'Use TLS' : 'Use SSL'}</span>
+                <span>{isRedisType ? l10n.t('Use TLS') : l10n.t('Use SSL')}</span>
               </label>
             </>
           )}
 
           <label style={labelStyle}>
-            <span>Group</span>
+            <span>{l10n.t('Group')}</span>
             <input
               type="text"
               value={form.group ?? ''}
               onChange={(e) => handleField('group', e.target.value)}
-              placeholder="(optional)"
+              placeholder={l10n.t('(optional)')}
               style={inputStyle}
             />
           </label>
 
           <label style={{ ...labelStyle, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <span>Color</span>
+            <span>{l10n.t('Color')}</span>
             <input
               type="color"
               value={form.color || '#4fc3f7'}
@@ -353,7 +354,7 @@ export function ConnectionDialog({ editId, onClose }: ConnectionDialogProps) {
         {/* Right Panel — SSH Tunnel */}
         {!isSqliteType && (
           <div style={panelStyle}>
-            <h3 style={sectionTitleStyle}>SSH Tunnel</h3>
+            <h3 style={sectionTitleStyle}>{l10n.t('SSH Tunnel')}</h3>
 
             <label style={{ ...labelStyle, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <input
@@ -362,24 +363,24 @@ export function ConnectionDialog({ editId, onClose }: ConnectionDialogProps) {
                 onChange={(e) => handleSshToggle(e.target.checked)}
                 style={{ width: 'auto' }}
               />
-              <span>Enable SSH Tunnel</span>
+              <span>{l10n.t('Enable SSH Tunnel')}</span>
             </label>
 
             {sshEnabled && form.ssh && (
               <>
                 <label style={labelStyle}>
-                  <span>SSH Host *</span>
+                  <span>{l10n.t('SSH Host *')}</span>
                   <input
                     type="text"
                     value={form.ssh.host}
                     onChange={(e) => handleSshField('host', e.target.value)}
-                    placeholder="bastion.example.com"
+                    placeholder={l10n.t('bastion.example.com')}
                     style={inputStyle}
                   />
                 </label>
 
                 <label style={labelStyle}>
-                  <span>SSH Port</span>
+                  <span>{l10n.t('SSH Port')}</span>
                   <input
                     type="number"
                     value={form.ssh.port}
@@ -389,49 +390,49 @@ export function ConnectionDialog({ editId, onClose }: ConnectionDialogProps) {
                 </label>
 
                 <label style={labelStyle}>
-                  <span>SSH Username *</span>
+                  <span>{l10n.t('SSH Username *')}</span>
                   <input
                     type="text"
                     value={form.ssh.username}
                     onChange={(e) => handleSshField('username', e.target.value)}
-                    placeholder="ubuntu"
+                    placeholder={l10n.t('ubuntu')}
                     style={inputStyle}
                   />
                 </label>
 
                 <label style={labelStyle}>
-                  <span>Auth Method</span>
+                  <span>{l10n.t('Auth Method')}</span>
                   <select
                     value={form.ssh.authMethod}
                     onChange={(e) => handleSshField('authMethod', e.target.value as 'password' | 'privateKey')}
                     style={inputStyle}
                   >
-                    <option value="password">Password</option>
-                    <option value="privateKey">Private Key</option>
+                    <option value="password">{l10n.t('Password')}</option>
+                    <option value="privateKey">{l10n.t('Private Key')}</option>
                   </select>
                 </label>
 
                 {form.ssh.authMethod === 'password' ? (
                   <label style={labelStyle}>
-                    <span>SSH Password</span>
+                    <span>{l10n.t('SSH Password')}</span>
                     <input
                       type="password"
                       value={form.sshPassword}
                       onChange={(e) => handleField('sshPassword', e.target.value)}
-                      placeholder={editId ? '(unchanged)' : ''}
+                      placeholder={editId ? l10n.t('(unchanged)') : ''}
                       style={inputStyle}
                     />
                   </label>
                 ) : (
                   <>
                     <label style={labelStyle}>
-                      <span>Private Key Path *</span>
+                      <span>{l10n.t('Private Key Path *')}</span>
                       <div style={{ display: 'flex', gap: 4 }}>
                         <input
                           type="text"
                           value={form.ssh.privateKeyPath ?? ''}
                           onChange={(e) => handleSshField('privateKeyPath', e.target.value)}
-                          placeholder="~/.ssh/id_rsa"
+                          placeholder={l10n.t('~/.ssh/id_rsa')}
                           style={{ ...inputStyle, flex: 1 }}
                         />
                         <button
@@ -440,17 +441,17 @@ export function ConnectionDialog({ editId, onClose }: ConnectionDialogProps) {
                           onClick={() => postMessage({ type: 'browseFile', target: 'sshKey' })}
                           style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
                         >
-                          Browse...
+                          {l10n.t('Browse...')}
                         </button>
                       </div>
                     </label>
                     <label style={labelStyle}>
-                      <span>Passphrase</span>
+                      <span>{l10n.t('Passphrase')}</span>
                       <input
                         type="password"
                         value={form.sshPassphrase}
                         onChange={(e) => handleField('sshPassphrase', e.target.value)}
-                        placeholder="(optional)"
+                        placeholder={l10n.t('(optional)')}
                         style={inputStyle}
                       />
                     </label>
@@ -466,7 +467,7 @@ export function ConnectionDialog({ editId, onClose }: ConnectionDialogProps) {
               disabled={sshTestStatus === 'testing' || !form.ssh?.host || !form.ssh?.username}
               style={{ marginTop: 4, alignSelf: 'flex-start' }}
             >
-              {sshTestStatus === 'testing' ? 'Testing...' : 'Test SSH Tunnel'}
+              {sshTestStatus === 'testing' ? l10n.t('Testing...') : l10n.t('Test SSH Tunnel')}
             </button>
             {sshTestStatus === 'ok' && (
               <div style={{
@@ -475,7 +476,7 @@ export function ConnectionDialog({ editId, onClose }: ConnectionDialogProps) {
                 border: '1px solid var(--vscode-testing-iconPassed, #4caf50)',
                 color: 'var(--vscode-testing-iconPassed, #4caf50)',
               }}>
-                SSH tunnel OK
+                {l10n.t('SSH tunnel OK')}
               </div>
             )}
             {sshTestStatus === 'fail' && (
@@ -485,7 +486,7 @@ export function ConnectionDialog({ editId, onClose }: ConnectionDialogProps) {
                 border: '1px solid var(--vscode-errorForeground, #f44)',
                 color: 'var(--vscode-errorForeground, #f44)',
               }}>
-                SSH failed: {sshTestError}
+                {l10n.t('SSH failed: {0}', sshTestError)}
               </div>
             )}
           </div>
@@ -503,7 +504,7 @@ export function ConnectionDialog({ editId, onClose }: ConnectionDialogProps) {
           color: 'var(--vscode-testing-iconPassed, #4caf50)',
           fontSize: 13,
         }}>
-          Connection successful
+          {l10n.t('Connection successful')}
         </div>
       )}
       {testStatus === 'fail' && (
@@ -517,24 +518,24 @@ export function ConnectionDialog({ editId, onClose }: ConnectionDialogProps) {
           fontSize: 13,
           wordBreak: 'break-word',
         }}>
-          Connection failed: {testError}
+          {l10n.t('Connection failed: {0}', testError)}
         </div>
       )}
 
       {/* Actions */}
       <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
         <button onClick={handleSave} disabled={!form.name.trim()}>
-          {editId ? 'Update' : 'Save'}
+          {editId ? l10n.t('Update') : l10n.t('Save')}
         </button>
         <button
           className="secondary"
           onClick={handleTest}
           disabled={testStatus === 'testing'}
         >
-          {testStatus === 'testing' ? 'Testing...' : 'Test Connection'}
+          {testStatus === 'testing' ? l10n.t('Testing...') : l10n.t('Test Connection')}
         </button>
         <button className="secondary" onClick={onClose}>
-          Cancel
+          {l10n.t('Cancel')}
         </button>
       </div>
     </div>

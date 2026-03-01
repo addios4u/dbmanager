@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef } from 'react';
+import * as l10n from '@vscode/l10n';
 import Editor, { type OnMount } from '@monaco-editor/react';
 import type { editor as monacoEditor } from 'monaco-editor';
 import { useQueryStore } from '../../stores/query';
@@ -93,10 +94,10 @@ export function QueryEditor({ connectionId }: QueryEditorProps) {
         <button
           onClick={executeQuery}
           disabled={isExecuting || !sql.trim()}
-          title="Execute query (Ctrl+Enter) — runs selected text if any"
+          title={l10n.t('Execute query (Ctrl+Enter) — runs selected text if any')}
           style={{ opacity: isExecuting || !sql.trim() ? 0.5 : 1 }}
         >
-          {isExecuting ? 'Running...' : 'Run'}
+          {isExecuting ? l10n.t('Running...') : l10n.t('Run')}
         </button>
         {isExecuting && (
           <button
@@ -109,7 +110,7 @@ export function QueryEditor({ connectionId }: QueryEditorProps) {
               }
             }}
           >
-            Cancel
+            {l10n.t('Cancel')}
           </button>
         )}
       </div>

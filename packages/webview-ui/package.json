@@ -12,6 +12,7 @@
   "dependencies": {
     "@dbmanager/shared": "workspace:*",
     "@monaco-editor/react": "^4.6.0",
+    "@vscode/l10n": "^0.0.18",
     "ag-grid-community": "^32.0.0",
     "ag-grid-react": "^32.0.0",
     "monaco-editor": "0.55.1",
