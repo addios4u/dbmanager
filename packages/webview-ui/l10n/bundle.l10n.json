@@ -118,5 +118,15 @@
   "Connection successful": "",
   "Connection failed: {0}": "",
   "Update": "",
-  "Test Connection": ""
+  "Test Connection": "",
+  "Refresh": "",
+  "Import": "",
+  "Importing... {0}": "",
+  "Import complete: {0} rows": "",
+  "Import failed: {0}": "",
+  "+ Add Row": "",
+  "Insert Row": "",
+  "Insert": "",
+  "Delete {0} row(s)?": "",
+  "NULL if empty": ""
 }

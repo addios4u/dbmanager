@@ -100,6 +100,7 @@ export interface RedisValue {
 export interface TableEdit {
   type: 'insert' | 'update' | 'delete';
   table: string;
+  schema?: string;
   primaryKey: Record<string, unknown>;
   changes: Record<string, unknown>;
 }

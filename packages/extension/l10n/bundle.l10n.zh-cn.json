@@ -96,5 +96,12 @@
   "Failed to load triggers: {0}": "加载触发器失败: {0}",
   "Failed to load extensions: {0}": "加载扩展失败: {0}",
   "Failed to load roles: {0}": "加载角色失败: {0}",
-  "Failed to scan Redis keys: {0}": "扫描 Redis 键失败: {0}"
+  "Failed to scan Redis keys: {0}": "扫描 Redis 键失败: {0}",
+  "Importable Files": "可导入的文件",
+  "Import Data into {0}": "导入数据到 {0}",
+  "Unsupported file format: .{0}": "不支持的文件格式: .{0}",
+  "No data rows found in file.": "文件中没有数据行。",
+  "No matching columns found.": "未找到匹配的列。",
+  "JSON file must contain an array of objects.": "JSON 文件必须包含对象数组。",
+  "XML file must contain repeating row elements.": "XML 文件必须包含重复的行元素。"
 }

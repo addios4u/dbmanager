@@ -118,5 +118,15 @@
   "Connection successful": "连接成功",
   "Connection failed: {0}": "连接失败: {0}",
   "Update": "更新",
-  "Test Connection": "测试连接"
+  "Test Connection": "测试连接",
+  "Refresh": "刷新",
+  "Import": "导入",
+  "Importing... {0}": "导入中... {0}",
+  "Import complete: {0} rows": "导入完成: {0} 行",
+  "Import failed: {0}": "导入失败: {0}",
+  "+ Add Row": "+ 添加行",
+  "Insert Row": "插入行",
+  "Insert": "插入",
+  "Delete {0} row(s)?": "确定删除 {0} 行？",
+  "NULL if empty": "留空为NULL"
 }

@@ -96,5 +96,12 @@
   "Failed to load triggers: {0}": "트리거 로드 실패: {0}",
   "Failed to load extensions: {0}": "확장 로드 실패: {0}",
   "Failed to load roles: {0}": "역할 로드 실패: {0}",
-  "Failed to scan Redis keys: {0}": "Redis 키 스캔 실패: {0}"
+  "Failed to scan Redis keys: {0}": "Redis 키 스캔 실패: {0}",
+  "Importable Files": "가져올 수 있는 파일",
+  "Import Data into {0}": "{0}에 데이터 가져오기",
+  "Unsupported file format: .{0}": "지원하지 않는 파일 형식: .{0}",
+  "No data rows found in file.": "파일에 데이터가 없습니다.",
+  "No matching columns found.": "일치하는 컬럼이 없습니다.",
+  "JSON file must contain an array of objects.": "JSON 파일은 객체 배열이어야 합니다.",
+  "XML file must contain repeating row elements.": "XML 파일에 반복되는 행 요소가 있어야 합니다."
 }

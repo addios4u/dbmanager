@@ -56,6 +56,23 @@ export function QueryEditor({ connectionId }: QueryEditorProps) {
           executeRef.current();
         },
       );
+      // Ctrl+V / Cmd+V to paste from clipboard (webview workaround)
+      editor.addCommand(
+        monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV,
+        async () => {
+          try {
+            const text = await navigator.clipboard.readText();
+            const selection = editor.getSelection();
+            if (selection) {
+              editor.executeEdits('paste', [
+                { range: selection, text, forceMoveMarkers: true },
+              ]);
+            }
+          } catch {
+            // fallback: let browser handle it
+          }
+        },
+      );
       // Ctrl+S / Cmd+S to save query to file
       editor.addCommand(
         monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS,

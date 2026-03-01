@@ -96,5 +96,12 @@
   "Failed to load triggers: {0}": "トリガーの読み込みに失敗しました: {0}",
   "Failed to load extensions: {0}": "拡張機能の読み込みに失敗しました: {0}",
   "Failed to load roles: {0}": "ロールの読み込みに失敗しました: {0}",
-  "Failed to scan Redis keys: {0}": "Redisキーのスキャンに失敗しました: {0}"
+  "Failed to scan Redis keys: {0}": "Redisキーのスキャンに失敗しました: {0}",
+  "Importable Files": "インポート可能なファイル",
+  "Import Data into {0}": "{0} にデータをインポート",
+  "Unsupported file format: .{0}": "サポートされていないファイル形式: .{0}",
+  "No data rows found in file.": "ファイルにデータ行がありません。",
+  "No matching columns found.": "一致するカラムが見つかりません。",
+  "JSON file must contain an array of objects.": "JSONファイルはオブジェクトの配列である必要があります。",
+  "XML file must contain repeating row elements.": "XMLファイルには繰り返しの行要素が必要です。"
 }

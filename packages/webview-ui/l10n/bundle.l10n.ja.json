@@ -118,5 +118,15 @@
   "Connection successful": "接続成功",
   "Connection failed: {0}": "接続失敗: {0}",
   "Update": "更新",
-  "Test Connection": "接続テスト"
+  "Test Connection": "接続テスト",
+  "Refresh": "更新",
+  "Import": "インポート",
+  "Importing... {0}": "インポート中... {0}",
+  "Import complete: {0} rows": "インポート完了: {0}行",
+  "Import failed: {0}": "インポート失敗: {0}",
+  "+ Add Row": "+ 行を追加",
+  "Insert Row": "行の挿入",
+  "Insert": "挿入",
+  "Delete {0} row(s)?": "{0}行を削除しますか？",
+  "NULL if empty": "空ならNULL"
 }

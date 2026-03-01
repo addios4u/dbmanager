@@ -96,5 +96,12 @@
   "Failed to load triggers: {0}": "",
   "Failed to load extensions: {0}": "",
   "Failed to load roles: {0}": "",
-  "Failed to scan Redis keys: {0}": ""
+  "Failed to scan Redis keys: {0}": "",
+  "Importable Files": "",
+  "Import Data into {0}": "",
+  "Unsupported file format: .{0}": "",
+  "No data rows found in file.": "",
+  "No matching columns found.": "",
+  "JSON file must contain an array of objects.": "",
+  "XML file must contain repeating row elements.": ""
 }

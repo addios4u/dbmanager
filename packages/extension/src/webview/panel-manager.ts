@@ -273,6 +273,16 @@ export class WebviewPanelManager {
         break;
       }
 
+      case 'exportTableData': {
+        void this.handleExportTableData(panel, msg.connectionId, msg.table, msg.schema, msg.format, msg.where, msg.sortColumn, msg.sortDirection);
+        break;
+      }
+
+      case 'importData': {
+        void this.handleImportData(panel, msg.connectionId, msg.table, msg.schema);
+        break;
+      }
+
       case 'redisScan': {
         void this.handleRedisScan(panel, msg.connectionId, msg.pattern, msg.cursor, msg.count ?? 200, msg.db);
         break;
@@ -571,9 +581,10 @@ export class WebviewPanelManager {
         dataParams = [limit, offset];
       }
 
-      const [countResult, dataResult, primaryKeys] = await Promise.all([
+      const [countResult, dataResult, columnsMeta, primaryKeys] = await Promise.all([
         dbAdapter.execute(countSql),
         dbAdapter.execute(dataSql, dataParams),
+        dbAdapter.getColumns(table, schema),
         dbAdapter.getPrimaryKey(table, schema),
       ]);
 
@@ -585,11 +596,16 @@ export class WebviewPanelManager {
         totalRows = typeof val === 'number' ? val : parseInt(String(val), 10) || 0;
       }
 
+      // Use getColumns() for readable type names (execute() returns numeric type IDs)
+      const columns = columnsMeta.length > 0
+        ? columnsMeta.map((c) => ({ name: c.name, type: c.type, nullable: c.nullable }))
+        : dataResult.columns;
+
       const tableDataMsg: ExtensionMessage = {
         type: 'tableData',
         connectionId,
         table,
-        columns: dataResult.columns,
+        columns,
         rows: dataResult.rows,
         totalRows,
         offset,
@@ -648,7 +664,9 @@ export class WebviewPanelManager {
 
     try {
       for (const edit of edits) {
-        const qualTable = quoteIdentifier(edit.table, dbType);
+        const qualTable = edit.schema
+          ? `${quoteIdentifier(edit.schema, dbType)}.${quoteIdentifier(edit.table, dbType)}`
+          : quoteIdentifier(edit.table, dbType);
 
         if (edit.type === 'insert') {
           const cols = Object.keys(edit.changes);
@@ -942,6 +960,392 @@ export class WebviewPanelManager {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Table data export handler (streaming from DB with WHERE/ORDER BY)
+  // ---------------------------------------------------------------------------
+
+  private async handleExportTableData(
+    panel: vscode.WebviewPanel,
+    connectionId: string,
+    table: string,
+    schema: string | undefined,
+    format: 'csv' | 'xlsx' | 'json' | 'xml',
+    where?: string,
+    sortColumn?: string,
+    sortDirection?: 'asc' | 'desc',
+  ): Promise<void> {
+    const adapter = this.connectionManager.getAdapter(connectionId);
+    if (!adapter || !('execute' in adapter)) {
+      const errMsg: ExtensionMessage = { type: 'exportError', error: 'No active database connection' };
+      void panel.webview.postMessage(errMsg);
+      return;
+    }
+    const dbAdapter = adapter as DatabaseAdapter;
+    const config = this.connectionManager.getConnection(connectionId);
+    if (!config) {
+      const errMsg: ExtensionMessage = { type: 'exportError', error: 'Connection config not found' };
+      void panel.webview.postMessage(errMsg);
+      return;
+    }
+
+    const filterMap: Record<string, { [label: string]: string[] }> = {
+      csv: { [vscode.l10n.t('CSV Files')]: ['csv'] },
+      xlsx: { [vscode.l10n.t('Excel Files')]: ['xlsx'] },
+      json: { [vscode.l10n.t('JSON Files')]: ['json'] },
+      xml: { [vscode.l10n.t('XML Files')]: ['xml'] },
+    };
+
+    const saveUri = await vscode.window.showSaveDialog({
+      defaultUri: vscode.Uri.file(path.join(require('os').homedir(), `${table}.${format}`)),
+      filters: filterMap[format] ?? {},
+      title: vscode.l10n.t('Export {0} as {1}', table, format.toUpperCase()),
+    });
+
+    if (!saveUri) return;
+
+    const dbType = config.type;
+    const isPostgres = dbType === 'postgresql';
+    const qualTable = schema
+      ? `${quoteIdentifier(schema, dbType)}.${quoteIdentifier(table, dbType)}`
+      : quoteIdentifier(table, dbType);
+
+    // Build WHERE and ORDER BY clauses
+    const wherePart = where ? ` WHERE ${where}` : '';
+    const orderPart = sortColumn
+      ? ` ORDER BY ${quoteIdentifier(sortColumn, dbType)} ${sortDirection === 'desc' ? 'DESC' : 'ASC'}`
+      : '';
+
+    try {
+      // Get total row count
+      const countResult = await dbAdapter.execute(`SELECT COUNT(*) AS cnt FROM ${qualTable}${wherePart}`);
+      const firstRow = countResult.rows[0];
+      let totalRows = 0;
+      if (firstRow) {
+        const val = firstRow['cnt'] ?? firstRow['count(*)'] ?? firstRow['COUNT(*)'] ?? firstRow['count'];
+        totalRows = typeof val === 'number' ? val : parseInt(String(val), 10) || 0;
+      }
+
+      if (format === 'xlsx') {
+        // XLSX: use ExcelJS with streaming adds
+        const ExcelJS = await import('exceljs');
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet(table);
+
+        let headersSet = false;
+        let headers: string[] = [];
+        let offset = 0;
+
+        while (offset < totalRows || (offset === 0 && totalRows === 0)) {
+          const dataSql = isPostgres
+            ? `SELECT * FROM ${qualTable}${wherePart}${orderPart} LIMIT $1 OFFSET $2`
+            : `SELECT * FROM ${qualTable}${wherePart}${orderPart} LIMIT ? OFFSET ?`;
+          const dataResult = await dbAdapter.execute(dataSql, [PAGE_SIZE, offset]);
+
+          if (!headersSet && dataResult.columns.length > 0) {
+            headers = dataResult.columns.map((c) => c.name);
+            worksheet.columns = headers.map((h) => ({
+              header: h,
+              key: h,
+              width: Math.max(h.length + 2, 12),
+            }));
+            const headerRow = worksheet.getRow(1);
+            headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4472C4' } };
+            headersSet = true;
+          }
+
+          for (const row of dataResult.rows) {
+            const values: Record<string, unknown> = {};
+            for (const h of headers) {
+              const val = row[h];
+              values[h] = val !== null && val !== undefined && typeof val === 'object' ? JSON.stringify(val) : val;
+            }
+            worksheet.addRow(values);
+          }
+
+          const percent = Math.min(100, Math.round(((offset + dataResult.rows.length) / Math.max(totalRows, 1)) * 100));
+          void panel.webview.postMessage({ type: 'exportProgress', percent, message: `${offset + dataResult.rows.length} / ${totalRows}` } as ExtensionMessage);
+
+          if (dataResult.rows.length < PAGE_SIZE) break;
+          offset += PAGE_SIZE;
+        }
+
+        if (headers.length > 0) {
+          worksheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: headers.length } };
+        }
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        await vscode.workspace.fs.writeFile(saveUri, Buffer.from(buffer as ArrayBuffer));
+      } else {
+        // CSV, JSON, XML: stream to file
+        let fileHandle: FileHandle | undefined;
+        try {
+          fileHandle = await fsOpen(saveUri.fsPath, 'w');
+
+          let headers: string[] | undefined;
+          const allRows: Record<string, unknown>[] = [];
+          let offset = 0;
+
+          // XML header
+          if (format === 'xml') {
+            await fileHandle.write('<?xml version="1.0" encoding="UTF-8"?>\n<results>\n');
+          }
+
+          while (offset < totalRows || (offset === 0 && totalRows === 0)) {
+            const dataSql = isPostgres
+              ? `SELECT * FROM ${qualTable}${wherePart}${orderPart} LIMIT $1 OFFSET $2`
+              : `SELECT * FROM ${qualTable}${wherePart}${orderPart} LIMIT ? OFFSET ?`;
+            const dataResult = await dbAdapter.execute(dataSql, [PAGE_SIZE, offset]);
+
+            if (!headers && dataResult.columns.length > 0) {
+              headers = dataResult.columns.map((c) => c.name);
+            }
+
+            if (format === 'json') {
+              allRows.push(...dataResult.rows);
+            } else if (format === 'csv') {
+              if (offset === 0 && headers) {
+                const headerLine = headers.map((h) => csvEscape(h, ',')).join(',') + '\n';
+                await fileHandle.write(headerLine);
+              }
+              for (const row of dataResult.rows) {
+                const line = (headers ?? []).map((h) => csvEscape(String(row[h] ?? ''), ',')).join(',') + '\n';
+                await fileHandle.write(line);
+              }
+            } else if (format === 'xml') {
+              for (const row of dataResult.rows) {
+                await fileHandle.write('  <row>\n');
+                for (const h of (headers ?? [])) {
+                  const value = row[h] === null || row[h] === undefined ? '' : typeof row[h] === 'object' ? JSON.stringify(row[h]) : String(row[h]);
+                  const tag = xmlTagName(h);
+                  await fileHandle.write(`    <${tag}>${xmlEscape(value)}</${tag}>\n`);
+                }
+                await fileHandle.write('  </row>\n');
+              }
+            }
+
+            const percent = Math.min(100, Math.round(((offset + dataResult.rows.length) / Math.max(totalRows, 1)) * 100));
+            void panel.webview.postMessage({ type: 'exportProgress', percent, message: `${offset + dataResult.rows.length} / ${totalRows}` } as ExtensionMessage);
+
+            if (dataResult.rows.length < PAGE_SIZE) break;
+            offset += PAGE_SIZE;
+          }
+
+          if (format === 'json' && fileHandle) {
+            await fileHandle.write(JSON.stringify(allRows, null, 2));
+          }
+          if (format === 'xml') {
+            await fileHandle.write('</results>\n');
+          }
+        } finally {
+          await fileHandle?.close();
+        }
+      }
+
+      const completeMsg: ExtensionMessage = { type: 'exportComplete', filePath: saveUri.fsPath };
+      void panel.webview.postMessage(completeMsg);
+    } catch (err) {
+      const errMsg: ExtensionMessage = { type: 'exportError', error: formatError(err) };
+      void panel.webview.postMessage(errMsg);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Import handler
+  // ---------------------------------------------------------------------------
+
+  private async handleImportData(
+    panel: vscode.WebviewPanel,
+    connectionId: string,
+    table: string,
+    schema?: string,
+  ): Promise<void> {
+    const adapter = this.connectionManager.getAdapter(connectionId);
+    if (!adapter || !('execute' in adapter)) {
+      void panel.webview.postMessage({ type: 'importError', error: 'No active database connection' } as ExtensionMessage);
+      return;
+    }
+    const dbAdapter = adapter as DatabaseAdapter;
+    const config = this.connectionManager.getConnection(connectionId);
+    if (!config) {
+      void panel.webview.postMessage({ type: 'importError', error: 'Connection config not found' } as ExtensionMessage);
+      return;
+    }
+
+    const fileUris = await vscode.window.showOpenDialog({
+      canSelectMany: false,
+      filters: {
+        [vscode.l10n.t('Importable Files')]: ['xlsx', 'csv', 'json', 'xml'],
+        [vscode.l10n.t('Excel Files')]: ['xlsx'],
+        [vscode.l10n.t('CSV Files')]: ['csv'],
+        [vscode.l10n.t('JSON Files')]: ['json'],
+        [vscode.l10n.t('XML Files')]: ['xml'],
+      },
+      title: vscode.l10n.t('Import Data into {0}', table),
+    });
+    if (!fileUris || fileUris.length === 0) return;
+    const pickedUri = fileUris[0];
+    if (!pickedUri) return;
+
+    const filePath = pickedUri.fsPath;
+    const ext = path.extname(filePath).toLowerCase().slice(1);
+
+    const dbType = config.type;
+    const isPostgres = dbType === 'postgresql';
+    const qualTable = schema
+      ? `${quoteIdentifier(schema, dbType)}.${quoteIdentifier(table, dbType)}`
+      : quoteIdentifier(table, dbType);
+
+    try {
+      // 1. Parse file into rows
+      let parsedRows: Record<string, unknown>[];
+      switch (ext) {
+        case 'csv':
+          parsedRows = this.parseCSV(filePath);
+          break;
+        case 'xlsx':
+          parsedRows = await this.parseXLSX(filePath);
+          break;
+        case 'json':
+          parsedRows = this.parseJSON(filePath);
+          break;
+        case 'xml':
+          parsedRows = this.parseXML(filePath);
+          break;
+        default:
+          throw new Error(vscode.l10n.t('Unsupported file format: .{0}', ext));
+      }
+
+      if (parsedRows.length === 0) {
+        throw new Error(vscode.l10n.t('No data rows found in file.'));
+      }
+
+      // 2. Validate columns against table schema
+      const tableColumns = await dbAdapter.getColumns(table, schema);
+      const tableColNames = new Set(tableColumns.map((c) => c.name));
+      const firstRow = parsedRows[0]!;
+      const fileColNames = Object.keys(firstRow);
+      const validColumns = fileColNames.filter((c) => tableColNames.has(c));
+
+      if (validColumns.length === 0) {
+        throw new Error(
+          vscode.l10n.t('No matching columns found.') +
+          ` File: ${fileColNames.join(', ')}. Table: ${tableColumns.map((c) => c.name).join(', ')}.`,
+        );
+      }
+
+      // 3. Build INSERT template
+      const colList = validColumns.map((c) => quoteIdentifier(c, dbType)).join(', ');
+      let placeholders: string;
+      if (isPostgres) {
+        placeholders = validColumns.map((_, i) => `$${i + 1}`).join(', ');
+      } else {
+        placeholders = validColumns.map(() => '?').join(', ');
+      }
+      const insertSql = `INSERT INTO ${qualTable} (${colList}) VALUES (${placeholders})`;
+
+      // 4. Insert rows in batches with progress
+      const totalRows = parsedRows.length;
+      let inserted = 0;
+
+      for (const row of parsedRows) {
+        const vals = validColumns.map((c) => {
+          const v = row[c];
+          if (v === undefined || v === '') return null;
+          return v;
+        });
+        await dbAdapter.execute(insertSql, vals);
+        inserted++;
+
+        if (inserted % 100 === 0 || inserted === totalRows) {
+          const percent = Math.min(100, Math.round((inserted / totalRows) * 100));
+          void panel.webview.postMessage({
+            type: 'importProgress',
+            percent,
+            message: `${inserted} / ${totalRows}`,
+          } as ExtensionMessage);
+        }
+      }
+
+      void panel.webview.postMessage({ type: 'importComplete', rowCount: inserted } as ExtensionMessage);
+    } catch (err) {
+      void panel.webview.postMessage({ type: 'importError', error: formatError(err) } as ExtensionMessage);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // File parsers for import
+  // ---------------------------------------------------------------------------
+
+  private parseCSV(filePath: string): Record<string, unknown>[] {
+    const { parse } = require('csv-parse/sync') as { parse: (input: string, options: Record<string, unknown>) => Record<string, unknown>[] };
+    const content = readFileSync(filePath, 'utf-8');
+    return parse(content, {
+      columns: true,
+      skip_empty_lines: true,
+      bom: true,
+      trim: true,
+    });
+  }
+
+  private async parseXLSX(filePath: string): Promise<Record<string, unknown>[]> {
+    const ExcelJS = await import('exceljs');
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(filePath);
+    const worksheet = workbook.worksheets[0];
+    if (!worksheet || worksheet.rowCount < 2) return [];
+
+    const headerRow = worksheet.getRow(1);
+    const headers: string[] = [];
+    headerRow.eachCell((cell, colNumber) => {
+      headers[colNumber - 1] = String(cell.value ?? `col${colNumber}`);
+    });
+
+    const rows: Record<string, unknown>[] = [];
+    for (let r = 2; r <= worksheet.rowCount; r++) {
+      const row = worksheet.getRow(r);
+      const obj: Record<string, unknown> = {};
+      let hasValue = false;
+      row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+        const header = headers[colNumber - 1];
+        if (header) {
+          obj[header] = cell.value;
+          if (cell.value !== null && cell.value !== undefined) hasValue = true;
+        }
+      });
+      if (hasValue) rows.push(obj);
+    }
+    return rows;
+  }
+
+  private parseJSON(filePath: string): Record<string, unknown>[] {
+    const content = readFileSync(filePath, 'utf-8');
+    const data: unknown = JSON.parse(content);
+    if (Array.isArray(data)) return data as Record<string, unknown>[];
+    throw new Error(vscode.l10n.t('JSON file must contain an array of objects.'));
+  }
+
+  private parseXML(filePath: string): Record<string, unknown>[] {
+    const { XMLParser } = require('fast-xml-parser') as { XMLParser: new (opts: Record<string, unknown>) => { parse: (content: string) => Record<string, unknown> } };
+    const content = readFileSync(filePath, 'utf-8');
+    const parser = new XMLParser({ ignoreAttributes: true });
+    const parsed = parser.parse(content);
+
+    // Find the first array of objects in the parsed structure
+    for (const key of Object.keys(parsed)) {
+      const val = parsed[key];
+      if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
+        for (const innerKey of Object.keys(val as Record<string, unknown>)) {
+          const arr = (val as Record<string, unknown>)[innerKey];
+          if (Array.isArray(arr) && arr.length > 0 && typeof arr[0] === 'object') {
+            return arr as Record<string, unknown>[];
+          }
+        }
+      }
+    }
+    throw new Error(vscode.l10n.t('XML file must contain repeating row elements.'));
+  }
+
   private async handleSaveQueryToFile(content: string): Promise<void> {
     const saveUri = await vscode.window.showSaveDialog({
       filters: { [vscode.l10n.t('SQL Files')]: ['sql'] },
@@ -1212,7 +1616,7 @@ export class WebviewPanelManager {
       `script-src 'nonce-${nonce}' ${webview.cspSource}`,
       `font-src ${webview.cspSource} data:`,
       `img-src ${webview.cspSource} data:`,
-    ].join('; ');
+    ].join('; ') + '; clipboard-read; clipboard-write';
 
     const initialState = JSON.stringify({
       meta: {
@@ -1304,6 +1708,21 @@ function csvEscape(value: string, delimiter: string): string {
     return '"' + value.replace(/"/g, '""') + '"';
   }
   return value;
+}
+
+function xmlEscape(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+function xmlTagName(name: string): string {
+  let tag = name.replace(/[^a-zA-Z0-9_.-]/g, '_');
+  if (/^[0-9.-]/.test(tag)) tag = '_' + tag;
+  return tag || '_field';
 }
 
 function sqlValue(value: unknown): string {

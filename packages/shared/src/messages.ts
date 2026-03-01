@@ -48,6 +48,17 @@ export type WebviewMessage =
   | { type: 'browseFile'; target: 'sqlite' | 'sshKey' }
   | { type: 'exportQueryResults'; format: 'csv' | 'json' | 'xml'; content: string; defaultFileName: string }
   | { type: 'exportQueryResultsXlsx'; columns: ColumnMeta[]; rows: Record<string, unknown>[]; defaultFileName: string }
+  | {
+      type: 'exportTableData';
+      connectionId: string;
+      table: string;
+      schema?: string;
+      format: 'csv' | 'xlsx' | 'json' | 'xml';
+      where?: string;
+      sortColumn?: string;
+      sortDirection?: 'asc' | 'desc';
+    }
+  | { type: 'importData'; connectionId: string; table: string; schema?: string }
   | { type: 'getSchemas'; connectionId: string; database?: string }
   | { type: 'switchQueryContext'; connectionId: string; database?: string; schema?: string }
   | { type: 'documentChange'; content: string }
@@ -83,6 +94,9 @@ export type ExtensionMessage =
   | { type: 'exportComplete'; filePath: string }
   | { type: 'exportError'; error: string }
   | { type: 'exportProgress'; percent: number; message: string }
+  | { type: 'importProgress'; percent: number; message: string }
+  | { type: 'importComplete'; rowCount: number }
+  | { type: 'importError'; error: string }
   | {
       type: 'redisKeys';
       connectionId: string;
