@@ -363,6 +363,9 @@ export class BackupService {
         (s) => !s.startsWith('pg_') && s !== 'information_schema',
       );
 
+      // Collect sequence setval statements to execute after all data is inserted
+      const sequenceSetvals: string[] = [];
+
       for (const schema of userSchemas) {
         throwIfCancelled(token);
         progress.report({ message: `Schema: ${schema}` });
@@ -375,6 +378,9 @@ export class BackupService {
 
         // Set search_path for subsequent queries
         await adapter.execute(`SET search_path TO ${quoteId(schema, dbType)}`);
+
+        // Dump sequences before tables (tables may reference them via nextval)
+        await this.dumpPgSequences(adapter, schema, dbType, fh, sequenceSetvals);
 
         const allTables = await adapter.getTables(schema);
         const tables = allTables.filter((t) => t.type === 'table');
@@ -395,6 +401,7 @@ export class BackupService {
             fh,
             token,
             table.name,
+            schema,
           );
         }
 
@@ -406,6 +413,15 @@ export class BackupService {
           await fh.write(`DROP VIEW IF EXISTS ${quoteId(schema, dbType)}.${quoteId(view.name, dbType)} CASCADE;\n`);
           await fh.write(`${ddl.replace(/;+\s*$/, '')};\n\n`);
         }
+      }
+
+      // Set sequence values after all data is inserted
+      if (sequenceSetvals.length > 0) {
+        await fh.write(`-- Restore sequence values\n`);
+        for (const setval of sequenceSetvals) {
+          await fh.write(`${setval}\n`);
+        }
+        await fh.write('\n');
       }
     } finally {
       await fh.close();
@@ -601,12 +617,159 @@ export class BackupService {
     if (pgAdapter.switchDatabase) {
       await pgAdapter.switchDatabase(database);
     }
-    await this.executeSqlFile(adapter, filePath, progress);
+    await this.executePgSqlFile(adapter, filePath, progress);
+  }
+
+  /**
+   * PostgreSQL-specific SQL file executor.
+   * Pre-processes INSERT statements to fix integer values in boolean columns
+   * (backwards compatibility with older backup files).
+   */
+  private async executePgSqlFile(
+    adapter: DatabaseAdapter,
+    filePath: string,
+    progress: vscode.Progress<{ message?: string; increment?: number }>,
+  ): Promise<void> {
+    const content = await fsp.readFile(filePath, 'utf-8');
+    const statements = splitSqlStatements(content);
+    const total = statements.length;
+    const errors: string[] = [];
+
+    // Phase 1: Pre-scan statements for boolean columns and missing sequences
+    const boolColumnsByTable = new Map<string, Set<string>>();
+    const referencedSequences = new Set<string>();
+    const definedSequences = new Set<string>();
+
+    for (const stmt of statements) {
+      // Identify boolean columns from CREATE TABLE
+      const createMatch = stmt.match(/CREATE\s+TABLE\s+(?:"[^"]*"\.)?"([^"]+)"/i);
+      if (createMatch) {
+        const tableName = createMatch[1]!;
+        const boolCols = new Set<string>();
+        const colRegex = /"([^"]+)"\s+boolean/gi;
+        let m;
+        while ((m = colRegex.exec(stmt)) !== null) {
+          boolCols.add(m[1]!);
+        }
+        if (boolCols.size > 0) {
+          boolColumnsByTable.set(tableName, boolCols);
+        }
+
+        // Collect sequence references from nextval('seq_name'::regclass)
+        const seqRefRegex = /nextval\('([^']+)'::regclass\)/gi;
+        let sm;
+        while ((sm = seqRefRegex.exec(stmt)) !== null) {
+          referencedSequences.add(sm[1]!);
+        }
+      }
+
+      // Track explicitly defined sequences
+      const seqMatch = stmt.match(/CREATE\s+SEQUENCE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:"[^"]*"\.)?"([^"]+)"/i);
+      if (seqMatch) {
+        definedSequences.add(seqMatch[1]!);
+      }
+    }
+
+    // Phase 2: Auto-create missing sequences (backwards compat with old backups)
+    for (const seqName of referencedSequences) {
+      // Strip schema prefix if present (e.g. "public.seq_name" → "seq_name")
+      const bare = seqName.includes('.') ? seqName.split('.').pop()! : seqName;
+      if (!definedSequences.has(bare) && !definedSequences.has(seqName)) {
+        progress.report({ message: `Creating missing sequence: ${seqName}` });
+        try {
+          await adapter.execute(`CREATE SEQUENCE IF NOT EXISTS "${bare}"`);
+        } catch {
+          // Sequence might already exist in the database — ignore
+        }
+      }
+    }
+
+    // Phase 3: Execute statements, fixing boolean values in INSERTs
+    for (let i = 0; i < total; i++) {
+      let stmt = statements[i]!;
+      if (!stmt) continue;
+
+      progress.report({ message: `Statement ${i + 1}/${total}` });
+
+      // Fix boolean values in INSERT statements
+      if (boolColumnsByTable.size > 0) {
+        stmt = fixPgBooleanInsert(stmt, boolColumnsByTable);
+      }
+
+      try {
+        await adapter.execute(stmt);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        const preview = stmt.length > 80 ? stmt.slice(0, 80) + '...' : stmt;
+        errors.push(`[${i + 1}] ${msg}\n    ${preview}`);
+      }
+    }
+
+    if (errors.length > 0) {
+      const succeeded = total - errors.length;
+      vscode.window.showWarningMessage(
+        `Restore completed with ${errors.length} error(s) out of ${total} statements (${succeeded} succeeded).`,
+        'Show Details',
+      ).then((action) => {
+        if (action === 'Show Details') {
+          const doc = errors.join('\n\n');
+          void vscode.workspace.openTextDocument({ content: doc, language: 'text' })
+            .then((d) => vscode.window.showTextDocument(d));
+        }
+      });
+    }
   }
 
   // ---------------------------------------------------------------------------
   // Shared helpers: data dump & SQL file execution
   // ---------------------------------------------------------------------------
+
+  /**
+   * Dump PostgreSQL sequences for a schema.
+   * CREATE SEQUENCE statements are written immediately;
+   * setval() calls are collected and written after all data is inserted.
+   */
+  private async dumpPgSequences(
+    adapter: DatabaseAdapter,
+    schema: string,
+    dbType: DatabaseType,
+    fh: fsp.FileHandle,
+    sequenceSetvals: string[],
+  ): Promise<void> {
+    const seqResult = await adapter.execute(
+      `SELECT sequencename, start_value, min_value, max_value,
+              increment_by, cycle, cache_size, last_value
+       FROM pg_sequences
+       WHERE schemaname = $1
+       ORDER BY sequencename`,
+      [schema],
+    );
+
+    if (seqResult.rows.length === 0) return;
+
+    await fh.write(`-- Sequences\n`);
+    for (const seq of seqResult.rows) {
+      const seqName = String(seq['sequencename']);
+      const qualifiedSeq = `${quoteId(schema, dbType)}.${quoteId(seqName, dbType)}`;
+
+      await fh.write(`DROP SEQUENCE IF EXISTS ${qualifiedSeq} CASCADE;\n`);
+      await fh.write(
+        `CREATE SEQUENCE ${qualifiedSeq}\n` +
+        `  INCREMENT BY ${seq['increment_by']}\n` +
+        `  MINVALUE ${seq['min_value']}\n` +
+        `  MAXVALUE ${seq['max_value']}\n` +
+        `  START WITH ${seq['start_value']}\n` +
+        `  CACHE ${seq['cache_size']}\n` +
+        `  ${seq['cycle'] ? 'CYCLE' : 'NO CYCLE'};\n\n`,
+      );
+
+      if (seq['last_value'] != null) {
+        sequenceSetvals.push(
+          `SELECT setval('${schema}.${seqName}', ${seq['last_value']}, true);`,
+        );
+      }
+    }
+  }
 
   private async dumpTableData(
     adapter: DatabaseAdapter,
@@ -615,9 +778,23 @@ export class BackupService {
     fh: fsp.FileHandle,
     token: vscode.CancellationToken,
     rawTableName?: string,
+    schema?: string,
   ): Promise<void> {
     const isPostgres = dbType === 'postgresql';
     let offset = 0;
+
+    // For PG, query information_schema for boolean columns (more reliable than OID)
+    let boolCols: Set<string> | undefined;
+    if (isPostgres && rawTableName && schema) {
+      const boolResult = await adapter.execute(
+        `SELECT column_name FROM information_schema.columns
+         WHERE table_schema = $1 AND table_name = $2 AND data_type = 'boolean'`,
+        [schema, rawTableName],
+      );
+      if (boolResult.rows.length > 0) {
+        boolCols = new Set(boolResult.rows.map((r) => String(r['column_name'])));
+      }
+    }
 
     // eslint-disable-next-line no-constant-condition
     while (true) {
@@ -636,20 +813,22 @@ export class BackupService {
         ? quoteId(rawTableName, dbType)
         : qualifiedTable;
 
-      // Detect boolean columns from result metadata (PG OID 16 = boolean)
-      const boolCols = isPostgres
-        ? new Set(result.columns.filter((c) => c.type === '16').map((c) => c.name))
-        : undefined;
+      // Fallback: detect boolean columns from OID if information_schema was not used
+      if (isPostgres && !boolCols) {
+        const oidBools = result.columns.filter((c) => c.type === '16').map((c) => c.name);
+        if (oidBools.length > 0) boolCols = new Set(oidBools);
+      }
 
       for (const row of result.rows) {
         const keys = Object.keys(row);
         const cols = keys.map((c) => quoteId(c, dbType)).join(', ');
         const vals = keys.map((k) => {
           const v = row[k];
-          // pg driver may return 0/1 as number for boolean columns
-          if (boolCols?.has(k) && (typeof v === 'number' || typeof v === 'string')) {
+          if (boolCols?.has(k)) {
             if (v === null || v === undefined) return 'NULL';
-            return v === 1 || v === '1' || v === 't' || v === 'true' ? 'TRUE' : 'FALSE';
+            if (typeof v === 'boolean') return v ? 'TRUE' : 'FALSE';
+            if (typeof v === 'number') return v !== 0 ? 'TRUE' : 'FALSE';
+            if (typeof v === 'string') return v === 't' || v === 'true' || v === '1' ? 'TRUE' : 'FALSE';
           }
           return sqlValue(v);
         }).join(', ');
@@ -867,6 +1046,10 @@ function sqlValue(value: unknown): string {
     });
     return `'${`{${elements.join(',')}}`}'`;
   }
+  // Plain objects (JSON/JSONB columns) — serialize with JSON.stringify
+  if (typeof value === 'object') {
+    return "'" + JSON.stringify(value).replace(/'/g, "''") + "'";
+  }
   return "'" + String(value).replace(/'/g, "''") + "'";
 }
 
@@ -952,4 +1135,91 @@ function execPromise(cmd: string, args: string[]): Promise<string> {
       else resolve(stdout);
     });
   });
+}
+
+/**
+ * Fix integer boolean values (0/1) in a PostgreSQL INSERT statement.
+ * Converts 0→FALSE, 1→TRUE for columns known to be boolean.
+ */
+function fixPgBooleanInsert(
+  stmt: string,
+  boolColumnsByTable: Map<string, Set<string>>,
+): string {
+  // Match: INSERT INTO "tablename" (columns) VALUES (
+  const headerMatch = stmt.match(
+    /^INSERT\s+INTO\s+"([^"]+)"\s+\(([^)]+)\)\s+VALUES\s+\(/i,
+  );
+  if (!headerMatch) return stmt;
+
+  const tableName = headerMatch[1]!;
+  const boolCols = boolColumnsByTable.get(tableName);
+  if (!boolCols || boolCols.size === 0) return stmt;
+
+  const columns = headerMatch[2]!.split(',').map((c) => c.trim().replace(/"/g, ''));
+  const boolIndices = new Set<number>();
+  columns.forEach((col, i) => {
+    if (boolCols.has(col)) boolIndices.add(i);
+  });
+  if (boolIndices.size === 0) return stmt;
+
+  // Extract the VALUES part (everything after "VALUES (", removing trailing ")")
+  const valuesStart = headerMatch[0]!.length;
+  const valuesSection = stmt.slice(valuesStart, -1); // remove trailing ")"
+
+  const values = splitSqlValues(valuesSection);
+  let changed = false;
+
+  for (const idx of boolIndices) {
+    if (idx < values.length) {
+      const v = values[idx]!.trim();
+      if (v === '1') { values[idx] = 'TRUE'; changed = true; }
+      else if (v === '0') { values[idx] = 'FALSE'; changed = true; }
+    }
+  }
+
+  if (!changed) return stmt;
+  return stmt.slice(0, valuesStart) + values.join(', ') + ')';
+}
+
+/**
+ * Split a SQL VALUES content by commas, respecting single-quoted strings
+ * and nested parentheses (e.g. array literals).
+ */
+function splitSqlValues(valuesStr: string): string[] {
+  const values: string[] = [];
+  let current = '';
+  let inString = false;
+  let depth = 0;
+
+  for (let i = 0; i < valuesStr.length; i++) {
+    const ch = valuesStr[i]!;
+
+    if (inString) {
+      current += ch;
+      if (ch === "'" && valuesStr[i + 1] === "'") {
+        current += valuesStr[++i]!; // escaped quote
+      } else if (ch === "'") {
+        inString = false;
+      }
+    } else if (ch === "'") {
+      inString = true;
+      current += ch;
+    } else if (ch === '(') {
+      depth++;
+      current += ch;
+    } else if (ch === ')') {
+      depth--;
+      current += ch;
+    } else if (ch === ',' && depth === 0) {
+      values.push(current.trim());
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+
+  const trimmed = current.trim();
+  if (trimmed) values.push(trimmed);
+
+  return values;
 }
