@@ -106,7 +106,7 @@ export interface TableEdit {
 
 export type ViewState =
   | { view: 'welcome' }
-  | { view: 'query'; connectionId: string }
+  | { view: 'query'; connectionId?: string }
   | { view: 'tableData'; connectionId: string; table: string; schema?: string; database?: string }
   | { view: 'schemaView'; connectionId: string; table: string; schema?: string }
   | { view: 'ddl'; connectionId: string; table: string; schema?: string }

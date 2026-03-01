@@ -29,22 +29,20 @@ function getInitialViewState(): ViewState {
   switch (meta.kind) {
     case 'connectionDialog':
       return { view: 'connectionDialog', editId: meta.editId };
-    case 'query':
-      if (meta.connectionId) {
-        // Pre-fill SQL editor if initial SQL is provided (e.g. from .sql file)
-        if (meta.initialSql) {
-          useQueryStore.getState().setSql(meta.initialSql);
-        }
-        // Pre-set database/schema context (e.g. from tree node or last-used)
-        if (meta.database) {
-          useQueryStore.getState().setDatabase(meta.database);
-        }
-        if (meta.schema) {
-          useQueryStore.getState().setSchema(meta.schema);
-        }
-        return { view: 'query', connectionId: meta.connectionId };
+    case 'query': {
+      // Pre-fill SQL editor if initial SQL is provided (e.g. from .sql file)
+      if (meta.initialSql) {
+        useQueryStore.getState().setSql(meta.initialSql);
       }
-      return { view: 'welcome' };
+      // Pre-set database/schema context (e.g. from tree node or last-used)
+      if (meta.database) {
+        useQueryStore.getState().setDatabase(meta.database);
+      }
+      if (meta.schema) {
+        useQueryStore.getState().setSchema(meta.schema);
+      }
+      return { view: 'query', connectionId: meta.connectionId };
+    }
     case 'tableData':
       return meta.connectionId && meta.tableName
         ? { view: 'tableData', connectionId: meta.connectionId, table: meta.tableName, schema: meta.schema, database: meta.database }
@@ -201,8 +199,8 @@ export default function App() {
 
 // ---- Query sub-view (kept inline — composes existing components with SplitPane) ----
 
-function QueryView({ connectionId: initialConnectionId }: { connectionId: string }) {
-  const [activeConnectionId, setActiveConnectionId] = useState(initialConnectionId);
+function QueryView({ connectionId: initialConnectionId }: { connectionId?: string }) {
+  const [activeConnectionId, setActiveConnectionId] = useState(initialConnectionId ?? '');
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>

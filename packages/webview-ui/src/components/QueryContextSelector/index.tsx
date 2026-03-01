@@ -142,6 +142,7 @@ export function QueryContextSelector({ connectionId, onConnectionChange }: Query
       <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
         <span style={labelStyle}>Connection</span>
         <select style={selectStyle} value={connectionId} onChange={handleConnectionChange}>
+          {!connectionId && <option value="">Select connection...</option>}
           {sqlConnections.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
