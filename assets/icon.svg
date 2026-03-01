@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bgC" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4338CA"/>
+      <stop offset="100%" stop-color="#312E81"/>
+    </linearGradient>
+    <linearGradient id="nodeC" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#818CF8"/>
+      <stop offset="100%" stop-color="#6366F1"/>
+    </linearGradient>
+    <linearGradient id="redisNode" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F87171"/>
+      <stop offset="100%" stop-color="#DC2626"/>
+    </linearGradient>
+    <linearGradient id="centerC" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F9FAFB"/>
+      <stop offset="100%" stop-color="#C7D2FE"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect x="4" y="4" width="248" height="248" rx="48" fill="url(#bgC)"/>
+
+  <!-- Connection lines from center to 5 satellite nodes (pentagon layout) -->
+  <g stroke="#818CF8" stroke-width="2" opacity="0.35">
+    <!-- Top -->
+    <line x1="128" y1="128" x2="128" y2="52"/>
+    <!-- Top-right -->
+    <line x1="128" y1="128" x2="200" y2="80"/>
+    <!-- Bottom-right -->
+    <line x1="128" y1="128" x2="184" y2="186"/>
+    <!-- Bottom-left -->
+    <line x1="128" y1="128" x2="72" y2="186"/>
+    <!-- Top-left -->
+    <line x1="128" y1="128" x2="56" y2="80"/>
+  </g>
+
+  <!-- Redis connection line (red tinted) -->
+  <line x1="128" y1="128" x2="184" y2="186" stroke="#F87171" stroke-width="2" opacity="0.25"/>
+
+  <!-- Center database node (main hub) -->
+  <g filter="url(#glow)">
+    <circle cx="128" cy="128" r="32" fill="url(#centerC)" opacity="0.95"/>
+  </g>
+  <!-- DB cylinder icon inside center -->
+  <g transform="translate(128, 120)">
+    <path d="M-14,0 L-14,18 C-14,18 -14,23 0,23 C14,23 14,18 14,18 L14,0" fill="#6366F1"/>
+    <ellipse cx="0" cy="0" rx="14" ry="5" fill="#4338CA"/>
+    <ellipse cx="0" cy="9" rx="14" ry="5" fill="none" stroke="#A5B4FC" stroke-width="0.8" opacity="0.4"/>
+  </g>
+
+  <!-- 5 Satellite nodes — pentagon arrangement -->
+  <!-- 1. Top (MySQL) -->
+  <circle cx="128" cy="52" r="15" fill="url(#nodeC)"/>
+  <circle cx="128" cy="50" r="4.5" fill="#C7D2FE" opacity="0.45"/>
+
+  <!-- 2. Top-right (PostgreSQL) -->
+  <circle cx="200" cy="80" r="14" fill="url(#nodeC)" opacity="0.9"/>
+  <circle cx="200" cy="78" r="4" fill="#C7D2FE" opacity="0.4"/>
+
+  <!-- 3. Bottom-right (Redis — red) -->
+  <circle cx="184" cy="186" r="14" fill="url(#redisNode)"/>
+  <circle cx="184" cy="184" r="4" fill="#FCA5A5" opacity="0.5"/>
+
+  <!-- 4. Bottom-left (SQLite) -->
+  <circle cx="72" cy="186" r="14" fill="url(#nodeC)" opacity="0.9"/>
+  <circle cx="72" cy="184" r="4" fill="#C7D2FE" opacity="0.4"/>
+
+  <!-- 5. Top-left (MariaDB) -->
+  <circle cx="56" cy="80" r="14" fill="url(#nodeC)" opacity="0.9"/>
+  <circle cx="56" cy="78" r="4" fill="#C7D2FE" opacity="0.4"/>
+</svg>
