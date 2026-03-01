@@ -20,18 +20,18 @@ export class BackupService {
   async backupDatabase(connectionId: string, database: string): Promise<void> {
     const config = this.connectionManager.getConnection(connectionId);
     if (!config) {
-      vscode.window.showErrorMessage('Connection not found.');
+      vscode.window.showErrorMessage(vscode.l10n.t('Connection not found.'));
       return;
     }
     if (!this.connectionManager.isConnected(connectionId)) {
-      vscode.window.showErrorMessage('Database is not connected.');
+      vscode.window.showErrorMessage(vscode.l10n.t('Database is not connected.'));
       return;
     }
 
     const isSqlite = config.type === 'sqlite';
     const filters: Record<string, string[]> = isSqlite
-      ? { 'Database Files': ['db', 'sqlite', 'sqlite3', 'bak'], 'All Files': ['*'] }
-      : { 'SQL Files': ['sql'], 'All Files': ['*'] };
+      ? { [vscode.l10n.t('Database Files')]: ['db', 'sqlite', 'sqlite3', 'bak'], [vscode.l10n.t('All Files')]: ['*'] }
+      : { [vscode.l10n.t('SQL Files')]: ['sql'], [vscode.l10n.t('All Files')]: ['*'] };
 
     const defaultName = isSqlite
       ? `${database}-backup-${timestamp()}.db`
@@ -40,28 +40,29 @@ export class BackupService {
     const saveUri = await vscode.window.showSaveDialog({
       defaultUri: vscode.Uri.file(defaultName),
       filters,
-      title: `Backup Database: ${database}`,
+      title: vscode.l10n.t('Backup Database: {0}', database),
     });
     if (!saveUri) return;
 
     const filePath = saveUri.fsPath;
 
     await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: `Backing up "${database}"`, cancellable: true },
+      { location: vscode.ProgressLocation.Notification, title: vscode.l10n.t('Backing up "{0}"', database), cancellable: true },
       async (progress, token) => {
         try {
           await this.dispatchBackup(config, connectionId, database, filePath, progress, token);
+          const openFileLabel = vscode.l10n.t('Open File');
           const action = await vscode.window.showInformationMessage(
-            `Backup complete: ${filePath}`,
-            'Open File',
+            vscode.l10n.t('Backup complete: {0}', filePath),
+            openFileLabel,
           );
-          if (action === 'Open File') {
+          if (action === openFileLabel) {
             void vscode.env.openExternal(vscode.Uri.file(filePath));
           }
         } catch (err) {
           // Clean up partial file on failure
           try { await fsp.unlink(filePath); } catch { /* ignore */ }
-          vscode.window.showErrorMessage(`Backup failed: ${errMsg(err)}`);
+          vscode.window.showErrorMessage(vscode.l10n.t('Backup failed: {0}', errMsg(err)));
         }
       },
     );
@@ -74,30 +75,31 @@ export class BackupService {
   ): Promise<void> {
     const config = this.connectionManager.getConnection(connectionId);
     if (!config) {
-      vscode.window.showErrorMessage('Connection not found.');
+      vscode.window.showErrorMessage(vscode.l10n.t('Connection not found.'));
       return;
     }
     if (!this.connectionManager.isConnected(connectionId)) {
-      vscode.window.showErrorMessage('Database is not connected.');
+      vscode.window.showErrorMessage(vscode.l10n.t('Database is not connected.'));
       return;
     }
 
+    const restoreLabel = vscode.l10n.t('Restore');
     const confirm = await vscode.window.showWarningMessage(
-      `Restoring will overwrite data in database "${database}". This action cannot be undone. Continue?`,
+      vscode.l10n.t('Restoring will overwrite data in database "{0}". This action cannot be undone. Continue?', database),
       { modal: true },
-      'Restore',
+      restoreLabel,
     );
-    if (confirm !== 'Restore') return;
+    if (confirm !== restoreLabel) return;
 
     const isSqlite = config.type === 'sqlite';
     const filters: Record<string, string[]> = isSqlite
-      ? { 'Database Files': ['db', 'sqlite', 'sqlite3', 'bak'], 'All Files': ['*'] }
-      : { 'SQL Files': ['sql'], 'All Files': ['*'] };
+      ? { [vscode.l10n.t('Database Files')]: ['db', 'sqlite', 'sqlite3', 'bak'], [vscode.l10n.t('All Files')]: ['*'] }
+      : { [vscode.l10n.t('SQL Files')]: ['sql'], [vscode.l10n.t('All Files')]: ['*'] };
 
     const openUri = await vscode.window.showOpenDialog({
       filters,
       canSelectMany: false,
-      title: `Restore Database: ${database}`,
+      title: vscode.l10n.t('Restore Database: {0}', database),
     });
     const selectedUri = openUri?.[0];
     if (!selectedUri) return;
@@ -105,14 +107,14 @@ export class BackupService {
     const filePath = selectedUri.fsPath;
 
     await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: `Restoring "${database}"`, cancellable: false },
+      { location: vscode.ProgressLocation.Notification, title: vscode.l10n.t('Restoring "{0}"', database), cancellable: false },
       async (progress) => {
         try {
           await this.dispatchRestore(config, connectionId, database, filePath, progress);
           refreshCallback?.();
-          vscode.window.showInformationMessage(`Restore complete: ${database}`);
+          vscode.window.showInformationMessage(vscode.l10n.t('Restore complete: {0}', database));
         } catch (err) {
-          vscode.window.showErrorMessage(`Restore failed: ${errMsg(err)}`);
+          vscode.window.showErrorMessage(vscode.l10n.t('Restore failed: {0}', errMsg(err)));
         }
       },
     );
@@ -192,7 +194,7 @@ export class BackupService {
         await this.backupMysqlCli(config, connectionId, database, filePath, password, toolPath, progress, token);
         return;
       } catch {
-        progress.report({ message: 'CLI failed, falling back to SQL...' });
+        progress.report({ message: vscode.l10n.t('CLI failed, falling back to SQL...') });
       }
     }
     await this.backupMysqlSql(connectionId, database, filePath, config.type, progress, token);
@@ -224,7 +226,7 @@ export class BackupService {
     const env: Record<string, string> = { ...process.env as Record<string, string> };
     if (password) env['MYSQL_PWD'] = password;
 
-    progress.report({ message: 'Running mysqldump...' });
+    progress.report({ message: vscode.l10n.t('Running mysqldump...') });
     await this.spawnCliTool(toolPath, args, env, token);
   }
 
@@ -299,7 +301,7 @@ export class BackupService {
         await this.backupPgCli(config, connectionId, database, filePath, password, toolPath, progress, token);
         return;
       } catch {
-        progress.report({ message: 'CLI failed, falling back to SQL...' });
+        progress.report({ message: vscode.l10n.t('CLI failed, falling back to SQL...') });
       }
     }
     await this.backupPgSql(connectionId, database, filePath, progress, token);
@@ -331,7 +333,7 @@ export class BackupService {
     const env: Record<string, string> = { ...process.env as Record<string, string> };
     if (password) env['PGPASSWORD'] = password;
 
-    progress.report({ message: 'Running pg_dump...' });
+    progress.report({ message: vscode.l10n.t('Running pg_dump...') });
     await this.spawnCliTool(toolPath, args, env, token);
   }
 
@@ -365,6 +367,8 @@ export class BackupService {
 
       // Collect sequence setval statements to execute after all data is inserted
       const sequenceSetvals: string[] = [];
+      // Collect CREATE INDEX statements — written after all data (like pg_dump post-data)
+      const postDataIndexes: string[] = [];
 
       for (const schema of userSchemas) {
         throwIfCancelled(token);
@@ -391,8 +395,24 @@ export class BackupService {
           progress.report({ message: `${schema}.${table.name}` });
 
           const ddl = await adapter.getTableDDL(table.name, schema);
+
+          // Separate CREATE TABLE from CREATE INDEX statements
+          // getTableDDL appends CREATE INDEX after CREATE TABLE with \n\n separator
+          const indexSplitPos = ddl.search(/\n\nCREATE\s+(?:UNIQUE\s+)?INDEX\s+/i);
+          let tableDdl: string;
+          if (indexSplitPos >= 0) {
+            tableDdl = ddl.slice(0, indexSplitPos);
+            // Extract individual CREATE INDEX statements
+            const indexPart = ddl.slice(indexSplitPos + 2); // skip leading \n\n
+            for (const idxStmt of indexPart.split(/\n\n/).filter((s) => s.trim())) {
+              postDataIndexes.push(idxStmt.replace(/;+\s*$/, '') + ';');
+            }
+          } else {
+            tableDdl = ddl;
+          }
+
           await fh.write(`DROP TABLE IF EXISTS ${quoteId(schema, dbType)}.${quoteId(table.name, dbType)} CASCADE;\n`);
-          await fh.write(`${ddl.replace(/;+\s*$/, '')};\n\n`);
+          await fh.write(`${tableDdl.replace(/;+\s*$/, '')};\n\n`);
 
           await this.dumpTableData(
             adapter,
@@ -413,6 +433,15 @@ export class BackupService {
           await fh.write(`DROP VIEW IF EXISTS ${quoteId(schema, dbType)}.${quoteId(view.name, dbType)} CASCADE;\n`);
           await fh.write(`${ddl.replace(/;+\s*$/, '')};\n\n`);
         }
+      }
+
+      // Post-data: Create indexes after all data is inserted
+      if (postDataIndexes.length > 0) {
+        await fh.write(`-- Indexes (post-data)\n`);
+        for (const idx of postDataIndexes) {
+          await fh.write(`${idx}\n`);
+        }
+        await fh.write('\n');
       }
 
       // Set sequence values after all data is inserted
@@ -440,7 +469,7 @@ export class BackupService {
     const sourcePath = resolvePath(config.filepath ?? '');
     if (!sourcePath) throw new Error('SQLite file path is required');
 
-    progress.report({ message: 'Copying database file...' });
+    progress.report({ message: vscode.l10n.t('Copying database file...') });
     await fsp.copyFile(sourcePath, filePath);
 
     // Copy WAL and SHM files if they exist
@@ -466,7 +495,7 @@ export class BackupService {
     await this.connectionManager.disconnect(connectionId);
 
     try {
-      progress.report({ message: 'Restoring database file...' });
+      progress.report({ message: vscode.l10n.t('Restoring database file...') });
       await fsp.copyFile(filePath, targetPath);
 
       // Remove stale WAL/SHM from target
@@ -506,7 +535,7 @@ export class BackupService {
         await this.restoreMysqlCli(config, connectionId, database, filePath, password, toolPath, progress);
         return;
       } catch {
-        progress.report({ message: 'CLI failed, falling back to SQL...' });
+        progress.report({ message: vscode.l10n.t('CLI failed, falling back to SQL...') });
       }
     }
     await this.restoreMysqlSql(connectionId, database, filePath, config.type, progress);
@@ -532,7 +561,7 @@ export class BackupService {
     const env: Record<string, string> = { ...process.env as Record<string, string> };
     if (password) env['MYSQL_PWD'] = password;
 
-    progress.report({ message: 'Restoring from SQL file...' });
+    progress.report({ message: vscode.l10n.t('Restoring from SQL file...') });
     await this.spawnCliToolWithFileInput(toolPath, args, filePath, env);
   }
 
@@ -566,7 +595,7 @@ export class BackupService {
         await this.restorePgCli(config, connectionId, database, filePath, password, toolPath, progress);
         return;
       } catch {
-        progress.report({ message: 'CLI failed, falling back to SQL...' });
+        progress.report({ message: vscode.l10n.t('CLI failed, falling back to SQL...') });
       }
     }
     await this.restorePgSql(connectionId, database, filePath, progress);
@@ -594,14 +623,14 @@ export class BackupService {
     const env: Record<string, string> = { ...process.env as Record<string, string> };
     if (password) env['PGPASSWORD'] = password;
 
-    progress.report({ message: 'Restoring from SQL file...' });
+    progress.report({ message: vscode.l10n.t('Restoring from SQL file...') });
     try {
       await this.spawnCliTool(toolPath, args, env);
     } catch (err) {
       // psql returns non-zero if any statement fails, but tables without errors are restored.
       const msg = err instanceof Error ? err.message : String(err);
       vscode.window.showWarningMessage(
-        `psql completed with errors. Some statements may have failed:\n${msg.slice(0, 300)}`,
+        vscode.l10n.t('psql completed with errors. Some statements may have failed:\n{0}', msg.slice(0, 300)),
       );
     }
   }
@@ -744,11 +773,12 @@ export class BackupService {
 
     if (errors.length > 0) {
       const succeeded = total - errors.length;
+      const showDetailsLabel = vscode.l10n.t('Show Details');
       vscode.window.showWarningMessage(
-        `Restore completed with ${errors.length} error(s) out of ${total} statements (${succeeded} succeeded).`,
-        'Show Details',
+        vscode.l10n.t('Restore completed with {0} error(s) out of {1} statements ({2} succeeded).', errors.length, total, succeeded),
+        showDetailsLabel,
       ).then((action) => {
-        if (action === 'Show Details') {
+        if (action === showDetailsLabel) {
           const doc = errors.join('\n\n');
           void vscode.workspace.openTextDocument({ content: doc, language: 'text' })
             .then((d) => vscode.window.showTextDocument(d));
@@ -847,11 +877,12 @@ export class BackupService {
     while (true) {
       throwIfCancelled(token);
 
+      const orderClause = isPostgres ? 'ORDER BY ctid' : '';
       const limitClause = isPostgres
         ? `LIMIT $1 OFFSET $2`
         : `LIMIT ? OFFSET ?`;
       const result = await adapter.execute(
-        `SELECT * FROM ${qualifiedTable} ${limitClause}`,
+        `SELECT * FROM ${qualifiedTable} ${orderClause} ${limitClause}`,
         [PAGE_SIZE, offset],
       );
       if (result.rows.length === 0) break;
@@ -922,11 +953,12 @@ export class BackupService {
 
     if (errors.length > 0) {
       const succeeded = total - errors.length;
+      const showDetailsLabel = vscode.l10n.t('Show Details');
       vscode.window.showWarningMessage(
-        `Restore completed with ${errors.length} error(s) out of ${total} statements (${succeeded} succeeded).`,
-        'Show Details',
+        vscode.l10n.t('Restore completed with {0} error(s) out of {1} statements ({2} succeeded).', errors.length, total, succeeded),
+        showDetailsLabel,
       ).then((action) => {
-        if (action === 'Show Details') {
+        if (action === showDetailsLabel) {
           const doc = errors.join('\n\n');
           void vscode.workspace.openTextDocument({ content: doc, language: 'text' })
             .then((d) => vscode.window.showTextDocument(d));
@@ -967,8 +999,8 @@ export class BackupService {
   private async promptCliPath(toolName: string): Promise<string | undefined> {
     const detected = await this.findCliTool(toolName);
     const userInput = await vscode.window.showInputBox({
-      title: `${toolName} CLI Path`,
-      prompt: `${toolName} 경로를 확인하세요. 비워두면 SQL 방식으로 실행합니다.`,
+      title: vscode.l10n.t('{0} CLI Path', toolName),
+      prompt: vscode.l10n.t('Confirm the path to {0}. Leave empty to use SQL fallback.', toolName),
       value: detected ?? '',
       placeHolder: `/usr/local/bin/${toolName}`,
       ignoreFocusOut: true,

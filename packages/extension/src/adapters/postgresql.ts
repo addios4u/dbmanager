@@ -309,11 +309,24 @@ export class PostgresqlAdapter implements DatabaseAdapter {
 
     let ddl = `CREATE TABLE "${s}"."${table}" (\n${colDefs.join(',\n')}\n);`;
 
-    // Add non-primary indexes
-    for (const idx of indexes) {
-      if (idx.isPrimary) continue;
-      const unique = idx.isUnique ? 'UNIQUE ' : '';
-      ddl += `\n\nCREATE ${unique}INDEX "${idx.name}" ON "${s}"."${table}" (${idx.columns.map((c) => `"${c}"`).join(', ')});`;
+    // Add non-primary indexes using pg_get_indexdef() for accurate DDL
+    // (captures partial index WHERE clauses, expression indexes, etc.)
+    const nonPrimaryIndexes = indexes.filter((i) => !i.isPrimary);
+    if (nonPrimaryIndexes.length > 0) {
+      const indexDefResult = await this.pool.query(
+        `SELECT pg_get_indexdef(i.oid) AS indexdef
+         FROM pg_index ix
+         JOIN pg_class t ON t.oid = ix.indrelid
+         JOIN pg_class i ON i.oid = ix.indexrelid
+         JOIN pg_namespace n ON n.oid = t.relnamespace
+         WHERE n.nspname = $1 AND t.relname = $2
+           AND NOT ix.indisprimary
+         ORDER BY i.relname`,
+        [s, table],
+      );
+      for (const row of indexDefResult.rows) {
+        ddl += `\n\n${String(row['indexdef'])};`;
+      }
     }
 
     return ddl;
