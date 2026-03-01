@@ -48,7 +48,9 @@ export type WebviewMessage =
   | { type: 'browseFile'; target: 'sqlite' | 'sshKey' }
   | { type: 'exportQueryResults'; format: 'csv' | 'json' | 'xml'; content: string; defaultFileName: string }
   | { type: 'getSchemas'; connectionId: string; database?: string }
-  | { type: 'switchQueryContext'; connectionId: string; database?: string; schema?: string };
+  | { type: 'switchQueryContext'; connectionId: string; database?: string; schema?: string }
+  | { type: 'documentChange'; content: string }
+  | { type: 'saveQueryToFile'; content: string };
 
 // Extension → Webview
 export type ExtensionMessage =
@@ -91,6 +93,7 @@ export type ExtensionMessage =
   | { type: 'filePicked'; target: 'sqlite' | 'sshKey'; path: string }
   | { type: 'databaseList'; connectionId: string; databases: string[] }
   | { type: 'schemaList'; connectionId: string; schemas: string[] }
+  | { type: 'documentContent'; content: string }
   | { type: 'error'; message: string };
 
 // Re-export used types to avoid unused import warnings

@@ -18,7 +18,7 @@ import { useRedisStore } from '../stores/redis';
 export function useExtensionMessages(): void {
   const { setConnections, setActiveConnection } = useConnectionStore();
   const { setResults, setError: setResultsError } = useResultsStore();
-  const { setExecuting, setDatabases: setQueryDatabases, setSchemas: setQuerySchemas } = useQueryStore();
+  const { setSql, setExecuting, setDatabases: setQueryDatabases, setSchemas: setQuerySchemas } = useQueryStore();
   const { setDatabases } = useSchemaStore();
   const { setTableData, setLoading: setTableLoading } = useTableDataStore();
   const { setKeys, setSelectedValue, setScanning, setLoadingValue } = useRedisStore();
@@ -87,6 +87,11 @@ export function useExtensionMessages(): void {
           setLoadingValue(false);
           break;
 
+        case 'documentContent':
+          // Document changed externally (e.g. undo/redo, external edit) — sync to Monaco
+          setSql(msg.content);
+          break;
+
         case 'error':
           setResultsError(msg.message);
           break;
@@ -118,6 +123,7 @@ export function useExtensionMessages(): void {
     setActiveConnection,
     setResults,
     setResultsError,
+    setSql,
     setExecuting,
     setQueryDatabases,
     setQuerySchemas,

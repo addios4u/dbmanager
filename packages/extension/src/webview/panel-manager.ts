@@ -51,8 +51,8 @@ function quoteIdentifier(name: string, dbType: string): string {
 }
 
 export class WebviewPanelManager {
-  private readonly context: vscode.ExtensionContext;
-  private readonly connectionManager: ConnectionManager;
+  readonly context: vscode.ExtensionContext;
+  readonly connectionManager: ConnectionManager;
   private readonly panels = new Map<string, vscode.WebviewPanel>();
 
   constructor(context: vscode.ExtensionContext, connectionManager: ConnectionManager) {
@@ -60,9 +60,9 @@ export class WebviewPanelManager {
     this.connectionManager = connectionManager;
   }
 
-  openQueryEditor(connectionId: string, database?: string): void {
+  openQueryEditor(connectionId: string, database?: string, schema?: string): void {
     const key = `query:${connectionId}`;
-    this.showOrCreate(key, `Query — ${this.getConnectionLabel(connectionId)}`, { kind: 'query', connectionId, database });
+    this.showOrCreate(key, `Query — ${this.getConnectionLabel(connectionId)}`, { kind: 'query', connectionId, database, schema });
   }
 
   openQueryEditorWithSql(connectionId: string, sql: string, fileName?: string): void {
@@ -144,7 +144,8 @@ export class WebviewPanelManager {
     this.panels.set(key, panel);
   }
 
-  private handleMessage(panel: vscode.WebviewPanel, meta: PanelMeta, msg: WebviewMessage): void {
+  /** Route a WebviewMessage to the appropriate handler. Public for reuse by SqlEditorProvider. */
+  handleMessage(panel: vscode.WebviewPanel, meta: PanelMeta, msg: WebviewMessage): void {
     switch (msg.type) {
       case 'ready': {
         // Send initial state snapshot
@@ -168,6 +169,19 @@ export class WebviewPanelManager {
         } else if (meta.kind === 'redis') {
           if (meta.connectionId) {
             void this.handleRedisScan(panel, meta.connectionId, '*', '0', 200, meta.redisDb);
+          }
+        } else if (meta.kind === 'query') {
+          if (meta.connectionId) {
+            // Pre-load database list
+            void this.handleGetDatabases(panel, meta.connectionId);
+            // Switch context and load schemas if database/schema are specified
+            if (meta.database || meta.schema) {
+              void this.handleSwitchQueryContext(panel, meta, meta.connectionId, meta.database, meta.schema).then(() => {
+                if (meta.database && meta.schema) {
+                  void this.handleGetSchemas(panel, meta.connectionId!, meta.database);
+                }
+              });
+            }
           }
         }
         break;
@@ -310,6 +324,16 @@ export class WebviewPanelManager {
 
       case 'switchQueryContext': {
         void this.handleSwitchQueryContext(panel, meta, msg.connectionId, msg.database, msg.schema);
+        break;
+      }
+
+      case 'documentChange': {
+        // Handled by SqlEditorProvider — no-op in regular panels
+        break;
+      }
+
+      case 'saveQueryToFile': {
+        void this.handleSaveQueryToFile(msg.content);
         break;
       }
 
@@ -828,6 +852,15 @@ export class WebviewPanelManager {
     }
   }
 
+  private async handleSaveQueryToFile(content: string): Promise<void> {
+    const saveUri = await vscode.window.showSaveDialog({
+      filters: { 'SQL Files': ['sql'] },
+      title: 'Save Query',
+    });
+    if (!saveUri) return;
+    await vscode.workspace.fs.writeFile(saveUri, Buffer.from(content, 'utf-8'));
+  }
+
   // ---------------------------------------------------------------------------
   // Redis handlers
   // ---------------------------------------------------------------------------
@@ -1078,7 +1111,7 @@ export class WebviewPanelManager {
     }
   }
 
-  private getWebviewContent(webview: vscode.Webview, nonce: string, meta: PanelMeta): string {
+  getWebviewContent(webview: vscode.Webview, nonce: string, meta: PanelMeta): string {
     const webviewDistUri = vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'webview');
     const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(webviewDistUri, 'webview.js'));
     const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(webviewDistUri, 'webview.css'));
@@ -1100,6 +1133,7 @@ export class WebviewPanelManager {
         database: meta.database,
         editId: meta.editId,
         redisDb: meta.redisDb,
+        initialSql: meta.initialSql,
       },
     });
 
@@ -1133,7 +1167,7 @@ export class WebviewPanelManager {
 </html>`;
   }
 
-  private getNonce(): string {
+  getNonce(): string {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     let nonce = '';
     for (let i = 0; i < 32; i++) {

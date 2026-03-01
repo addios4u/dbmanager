@@ -214,7 +214,17 @@
           "group": "navigation"
         }
       ]
-    }
+    },
+    "customEditors": [
+      {
+        "viewType": "dbmanager.sqlEditor",
+        "displayName": "DB Manager Query",
+        "selector": [
+          { "filenamePattern": "*.sql" }
+        ],
+        "priority": "default"
+      }
+    ]
   },
   "scripts": {
     "build": "node esbuild.mjs --production",

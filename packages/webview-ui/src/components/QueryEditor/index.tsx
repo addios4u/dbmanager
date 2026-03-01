@@ -55,6 +55,16 @@ export function QueryEditor({ connectionId }: QueryEditorProps) {
           executeRef.current();
         },
       );
+      // Ctrl+S / Cmd+S to save query to file
+      editor.addCommand(
+        monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS,
+        () => {
+          const content = editor.getValue();
+          if (content.trim()) {
+            postMessage({ type: 'saveQueryToFile', content });
+          }
+        },
+      );
     },
     [],
   );
@@ -108,7 +118,12 @@ export function QueryEditor({ connectionId }: QueryEditorProps) {
           height="100%"
           language="sql"
           value={sql}
-          onChange={(value) => setSql(value ?? '')}
+          onChange={(value) => {
+            const v = value ?? '';
+            setSql(v);
+            // Sync to TextDocument for CustomEditor
+            postMessage({ type: 'documentChange', content: v });
+          }}
           theme={isDark ? 'vs-dark' : 'vs'}
           onMount={handleMount}
           options={{

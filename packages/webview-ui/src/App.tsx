@@ -35,6 +35,13 @@ function getInitialViewState(): ViewState {
         if (meta.initialSql) {
           useQueryStore.getState().setSql(meta.initialSql);
         }
+        // Pre-set database/schema context (e.g. from tree node or last-used)
+        if (meta.database) {
+          useQueryStore.getState().setDatabase(meta.database);
+        }
+        if (meta.schema) {
+          useQueryStore.getState().setSchema(meta.schema);
+        }
         return { view: 'query', connectionId: meta.connectionId };
       }
       return { view: 'welcome' };

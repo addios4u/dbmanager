@@ -1,7 +1,10 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
+import * as os from 'os';
 import { ConnectionManager } from './services/connection-manager.js';
 import { DatabaseTreeProvider } from './providers/database-tree.js';
 import { WebviewPanelManager } from './webview/panel-manager.js';
+import { SqlEditorProvider } from './webview/sql-editor-provider.js';
 import { COMMAND_IDS, VIEW_IDS } from '@dbmanager/shared';
 
 let connectionManager: ConnectionManager;
@@ -20,6 +23,38 @@ export function activate(context: vscode.ExtensionContext): void {
     showCollapseAll: true,
   });
   context.subscriptions.push(treeView);
+
+  // Register SQL CustomEditor
+  context.subscriptions.push(
+    vscode.window.registerCustomEditorProvider(
+      SqlEditorProvider.viewType,
+      new SqlEditorProvider(panelManager),
+      { webviewOptions: { retainContextWhenHidden: true } },
+    ),
+  );
+
+  // Auto-redirect .sql files opened in the default text editor to our custom editor
+  let isRedirecting = false;
+  const redirectSqlEditor = (editor: vscode.TextEditor | undefined) => {
+    if (isRedirecting) return;
+    if (!editor) return;
+    if (editor.document.uri.scheme !== 'file') return;
+    if (!editor.document.fileName.endsWith('.sql')) return;
+
+    isRedirecting = true;
+    const uri = editor.document.uri;
+    void vscode.commands.executeCommand('workbench.action.closeActiveEditor').then(
+      () => vscode.commands.executeCommand('vscode.openWith', uri, SqlEditorProvider.viewType),
+    ).then(
+      () => { isRedirecting = false; },
+      () => { isRedirecting = false; },
+    );
+  };
+  context.subscriptions.push(
+    vscode.window.onDidChangeActiveTextEditor(redirectSqlEditor),
+  );
+  // Also redirect if a .sql file is already active when the extension starts
+  redirectSqlEditor(vscode.window.activeTextEditor);
 
   // Register commands
   context.subscriptions.push(
@@ -40,9 +75,28 @@ export function activate(context: vscode.ExtensionContext): void {
         treeProvider.refresh(node as Parameters<typeof treeProvider.refresh>[0]);
       });
     }),
-    vscode.commands.registerCommand(COMMAND_IDS.NEW_QUERY, (node) => {
-      const n = node as { connectionId: string; database?: string };
-      panelManager.openQueryEditor(n.connectionId, n.database);
+    vscode.commands.registerCommand(COMMAND_IDS.NEW_QUERY, async (node) => {
+      const n = node as { connectionId: string; database?: string; schema?: string };
+      // Remember last-used connection + context for SqlEditorProvider
+      await context.globalState.update('dbmanager.lastQueryConnectionId', n.connectionId);
+      await context.globalState.update('dbmanager.lastQueryDatabase', n.database);
+      await context.globalState.update('dbmanager.lastQuerySchema', n.schema);
+      // Build metadata header comment
+      const conn = connectionManager.getConnection(n.connectionId);
+      const connName = conn?.name ?? n.connectionId;
+      const connType = conn?.type ?? 'unknown';
+      let header = `-- DBManager: ${connName} (${connType})`;
+      if (n.database) header += ` | Database: ${n.database}`;
+      if (n.schema) header += ` | Schema: ${n.schema}`;
+      header += '\n\n';
+      // Create .sql file in workspace dbmanager folder
+      const wsFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? os.homedir();
+      const queryDir = path.join(wsFolder, 'dbmanager');
+      await vscode.workspace.fs.createDirectory(vscode.Uri.file(queryDir));
+      const fileName = `untitled-${Date.now()}.sql`;
+      const fileUri = vscode.Uri.file(path.join(queryDir, fileName));
+      await vscode.workspace.fs.writeFile(fileUri, Buffer.from(header, 'utf-8'));
+      await vscode.commands.executeCommand('vscode.openWith', fileUri, SqlEditorProvider.viewType);
     }),
     vscode.commands.registerCommand(COMMAND_IDS.VIEW_TABLE_DATA, (node) => {
       const n = node as { connectionId: string; tableName: string; schema?: string; database?: string };
@@ -105,37 +159,8 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
 
-      // Read file content
-      const content = await vscode.workspace.fs.readFile(fileUri);
-      const sql = Buffer.from(content).toString('utf-8');
-      const fileName = fileUri.path.split('/').pop() ?? 'query.sql';
-
-      // Pick connection
-      const connInfos = connectionManager.getConnectionInfos();
-      if (connInfos.length === 0) {
-        vscode.window.showWarningMessage('No database connections configured. Add a connection first.');
-        return;
-      }
-
-      // Use last-used connection or prompt the user
-      const lastConnId = context.globalState.get<string>('dbmanager.lastQueryConnectionId');
-      let connectionId = lastConnId && connInfos.some((c) => c.id === lastConnId) ? lastConnId : undefined;
-
-      if (!connectionId) {
-        if (connInfos.length === 1) {
-          connectionId = connInfos[0]!.id;
-        } else {
-          const picked = await vscode.window.showQuickPick(
-            connInfos.map((c) => ({ label: c.name, description: c.type, id: c.id })),
-            { placeHolder: 'Select a database connection for this query' },
-          );
-          if (!picked) return;
-          connectionId = picked.id;
-        }
-      }
-
-      await context.globalState.update('dbmanager.lastQueryConnectionId', connectionId);
-      panelManager.openQueryEditorWithSql(connectionId, sql, fileName);
+      // Open with our custom SQL editor
+      await vscode.commands.executeCommand('vscode.openWith', fileUri, SqlEditorProvider.viewType);
     }),
   );
 }
