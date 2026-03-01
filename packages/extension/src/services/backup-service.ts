@@ -635,13 +635,14 @@ export class BackupService {
     const total = statements.length;
     const errors: string[] = [];
 
-    // Phase 1: Pre-scan statements for boolean columns and missing sequences
+    // Phase 1: Pre-scan statements for boolean/JSON columns and missing sequences
     const boolColumnsByTable = new Map<string, Set<string>>();
+    const jsonColumnsByTable = new Map<string, Set<string>>();
     const referencedSequences = new Set<string>();
     const definedSequences = new Set<string>();
 
     for (const stmt of statements) {
-      // Identify boolean columns from CREATE TABLE
+      // Identify boolean and JSON/JSONB columns from CREATE TABLE
       const createMatch = stmt.match(/CREATE\s+TABLE\s+(?:"[^"]*"\.)?"([^"]+)"/i);
       if (createMatch) {
         const tableName = createMatch[1]!;
@@ -653,6 +654,17 @@ export class BackupService {
         }
         if (boolCols.size > 0) {
           boolColumnsByTable.set(tableName, boolCols);
+        }
+
+        // Detect JSON/JSONB columns
+        const jsonCols = new Set<string>();
+        const jsonColRegex = /"([^"]+)"\s+jsonb?\b/gi;
+        let jm;
+        while ((jm = jsonColRegex.exec(stmt)) !== null) {
+          jsonCols.add(jm[1]!);
+        }
+        if (jsonCols.size > 0) {
+          jsonColumnsByTable.set(tableName, jsonCols);
         }
 
         // Collect sequence references from nextval('seq_name'::regclass)
@@ -694,6 +706,31 @@ export class BackupService {
       // Fix boolean values in INSERT statements
       if (boolColumnsByTable.size > 0) {
         stmt = fixPgBooleanInsert(stmt, boolColumnsByTable);
+      }
+
+      // Use parameterized queries for INSERT into tables with JSON/JSONB columns
+      if (jsonColumnsByTable.size > 0) {
+        const insertMatch = stmt.match(/^INSERT\s+INTO\s+"([^"]+)"\s+\(([^)]+)\)\s+VALUES\s+\(/i);
+        if (insertMatch && jsonColumnsByTable.has(insertMatch[1]!)) {
+          try {
+            const tableName = insertMatch[1]!;
+            const columnsStr = insertMatch[2]!;
+            const valuesStart = insertMatch[0]!.length;
+            const valuesSection = stmt.slice(valuesStart, -1); // remove trailing ")"
+            const values = splitSqlValues(valuesSection);
+            const params = values.map((v) => parseSqlLiteral(v.trim()));
+            const placeholders = values.map((_, idx) => `$${idx + 1}`).join(', ');
+            await adapter.execute(
+              `INSERT INTO "${tableName}" (${columnsStr}) VALUES (${placeholders})`,
+              params,
+            );
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            const preview = stmt.length > 80 ? stmt.slice(0, 80) + '...' : stmt;
+            errors.push(`[${i + 1}] ${msg}\n    ${preview}`);
+          }
+          continue;
+        }
       }
 
       try {
@@ -783,16 +820,26 @@ export class BackupService {
     const isPostgres = dbType === 'postgresql';
     let offset = 0;
 
-    // For PG, query information_schema for boolean columns (more reliable than OID)
+    // For PG, query information_schema for boolean & JSON/JSONB columns
     let boolCols: Set<string> | undefined;
+    let jsonCols: Set<string> | undefined;
     if (isPostgres && rawTableName && schema) {
-      const boolResult = await adapter.execute(
-        `SELECT column_name FROM information_schema.columns
-         WHERE table_schema = $1 AND table_name = $2 AND data_type = 'boolean'`,
+      const typeResult = await adapter.execute(
+        `SELECT column_name, data_type FROM information_schema.columns
+         WHERE table_schema = $1 AND table_name = $2
+           AND data_type IN ('boolean', 'json', 'jsonb')`,
         [schema, rawTableName],
       );
-      if (boolResult.rows.length > 0) {
-        boolCols = new Set(boolResult.rows.map((r) => String(r['column_name'])));
+      for (const r of typeResult.rows) {
+        const colName = String(r['column_name']);
+        const dataType = String(r['data_type']);
+        if (dataType === 'boolean') {
+          if (!boolCols) boolCols = new Set();
+          boolCols.add(colName);
+        } else {
+          if (!jsonCols) jsonCols = new Set();
+          jsonCols.add(colName);
+        }
       }
     }
 
@@ -829,6 +876,11 @@ export class BackupService {
             if (typeof v === 'boolean') return v ? 'TRUE' : 'FALSE';
             if (typeof v === 'number') return v !== 0 ? 'TRUE' : 'FALSE';
             if (typeof v === 'string') return v === 't' || v === 'true' || v === '1' ? 'TRUE' : 'FALSE';
+          }
+          if (jsonCols?.has(k)) {
+            if (v === null || v === undefined) return 'NULL';
+            // Always use JSON.stringify — handles arrays, objects, and primitives correctly
+            return "'" + JSON.stringify(v).replace(/'/g, "''") + "'";
           }
           return sqlValue(v);
         }).join(', ');
@@ -1222,4 +1274,33 @@ function splitSqlValues(valuesStr: string): string[] {
   if (trimmed) values.push(trimmed);
 
   return values;
+}
+
+/**
+ * Parse a SQL literal string back to a JavaScript value.
+ * Used for parameterized query execution during restore.
+ */
+function parseSqlLiteral(literal: string): unknown {
+  const upper = literal.toUpperCase();
+  if (upper === 'NULL') return null;
+  if (upper === 'TRUE') return true;
+  if (upper === 'FALSE') return false;
+
+  // String literal: '...'
+  if (literal.startsWith("'") && literal.endsWith("'") && literal.length >= 2) {
+    return literal.slice(1, -1).replace(/''/g, "'");
+  }
+
+  // Hex literal: X'...'
+  if (/^X'[0-9a-fA-F]*'$/i.test(literal)) {
+    return Buffer.from(literal.slice(2, -1), 'hex');
+  }
+
+  // Number
+  if (/^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(literal)) {
+    return Number(literal);
+  }
+
+  // Fallback: return as-is
+  return literal;
 }

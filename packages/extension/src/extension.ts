@@ -203,6 +203,77 @@ export function activate(context: vscode.ExtensionContext): void {
         treeProvider.refresh();
       });
     }),
+    vscode.commands.registerCommand(COMMAND_IDS.CREATE_DATABASE, async (node) => {
+      const n = node as { connectionId: string };
+      const config = connectionManager.getConnection(n.connectionId);
+      if (!config || config.type === 'sqlite' || config.type === 'redis') {
+        vscode.window.showErrorMessage('Create database is not supported for this connection type.');
+        return;
+      }
+      const adapter = connectionManager.getAdapter(n.connectionId);
+      if (!adapter || !('execute' in adapter)) {
+        vscode.window.showErrorMessage('No active connection.');
+        return;
+      }
+      const dbName = await vscode.window.showInputBox({
+        title: 'Create Database',
+        prompt: 'Enter the new database name',
+        placeHolder: 'my_database',
+        ignoreFocusOut: true,
+        validateInput: (v) => (v.trim() ? null : 'Database name is required'),
+      });
+      if (!dbName) return;
+      try {
+        const q = config.type === 'mysql' || config.type === 'mariadb'
+          ? '`' + dbName.replace(/`/g, '``') + '`'
+          : '"' + dbName.replace(/"/g, '""') + '"';
+        await adapter.execute(`CREATE DATABASE ${q}`);
+        vscode.window.showInformationMessage(`Database "${dbName}" created.`);
+        treeProvider.refresh();
+      } catch (err) {
+        vscode.window.showErrorMessage(`Create database failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }),
+    vscode.commands.registerCommand(COMMAND_IDS.DROP_DATABASE, async (node) => {
+      const n = node as { connectionId: string; database?: string };
+      if (!n.database) {
+        vscode.window.showErrorMessage('No database selected.');
+        return;
+      }
+      const config = connectionManager.getConnection(n.connectionId);
+      if (!config) {
+        vscode.window.showErrorMessage('Connection not found.');
+        return;
+      }
+      const confirm = await vscode.window.showWarningMessage(
+        `Drop database "${n.database}"? All data will be permanently deleted. This action cannot be undone.`,
+        { modal: true },
+        'Drop',
+      );
+      if (confirm !== 'Drop') return;
+      try {
+        const adapter = connectionManager.getAdapter(n.connectionId);
+        if (!adapter || !('execute' in adapter)) {
+          vscode.window.showErrorMessage('No active connection.');
+          return;
+        }
+        const q = config.type === 'mysql' || config.type === 'mariadb'
+          ? '`' + n.database.replace(/`/g, '``') + '`'
+          : '"' + n.database.replace(/"/g, '""') + '"';
+        // PostgreSQL: can't drop current database — switch to 'postgres' first
+        if (config.type === 'postgresql') {
+          const pgAdapter = adapter as typeof adapter & { switchDatabase?(db: string): Promise<void> };
+          if (pgAdapter.switchDatabase) {
+            await pgAdapter.switchDatabase('postgres');
+          }
+        }
+        await adapter.execute(`DROP DATABASE ${q}`);
+        vscode.window.showInformationMessage(`Database "${n.database}" has been dropped.`);
+        treeProvider.refresh();
+      } catch (err) {
+        vscode.window.showErrorMessage(`Drop database failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }),
   );
 }
 

@@ -23,6 +23,8 @@ export const COMMAND_IDS = {
   OPEN_SQL_FILE: 'dbmanager.openSqlFile',
   BACKUP_DATABASE: 'dbmanager.backupDatabase',
   RESTORE_DATABASE: 'dbmanager.restoreDatabase',
+  CREATE_DATABASE: 'dbmanager.createDatabase',
+  DROP_DATABASE: 'dbmanager.dropDatabase',
 } as const;
 
 export const DEFAULT_PORTS: Record<string, number> = {

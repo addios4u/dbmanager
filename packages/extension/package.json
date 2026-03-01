@@ -124,6 +124,16 @@
         "command": "dbmanager.restoreDatabase",
         "title": "Restore Database",
         "category": "DB Manager"
+      },
+      {
+        "command": "dbmanager.createDatabase",
+        "title": "Create Database",
+        "category": "DB Manager"
+      },
+      {
+        "command": "dbmanager.dropDatabase",
+        "title": "Drop Database",
+        "category": "DB Manager"
       }
     ],
     "menus": {
@@ -214,6 +224,16 @@
           "command": "dbmanager.restoreDatabase",
           "when": "view == dbmanager.connections && viewItem =~ /^database-(mysql|mariadb|postgresql|sqlite)$/",
           "group": "2_backup@2"
+        },
+        {
+          "command": "dbmanager.createDatabase",
+          "when": "view == dbmanager.connections && viewItem == connection-connected",
+          "group": "2_database@1"
+        },
+        {
+          "command": "dbmanager.dropDatabase",
+          "when": "view == dbmanager.connections && viewItem =~ /^database-(mysql|mariadb|postgresql)$/",
+          "group": "3_danger@1"
         },
         {
           "command": "dbmanager.refresh",
