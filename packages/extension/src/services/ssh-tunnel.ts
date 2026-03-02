@@ -1,12 +1,19 @@
 import * as net from 'node:net';
-import { Client } from 'ssh2';
 import * as fs from 'node:fs';
 import type { ConnectionConfig } from '@dbmanager/shared';
 
+type SshClient = import('ssh2').Client;
+
 interface TunnelEntry {
-  sshClient: Client;
+  sshClient: SshClient;
   server: net.Server;
   localPort: number;
+}
+
+function createSshClient(): SshClient {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { Client } = require('ssh2') as typeof import('ssh2');
+  return new Client();
 }
 
 export class SshTunnelManager {
@@ -35,7 +42,7 @@ export class SshTunnelManager {
     const dbHost = config.host ?? '127.0.0.1';
     const dbPort = config.port ?? 3306;
 
-    const sshClient = new Client();
+    const sshClient = createSshClient();
 
     const authConfig: Record<string, unknown> = {
       host: ssh.host,
@@ -56,7 +63,7 @@ export class SshTunnelManager {
     await new Promise<void>((resolve, reject) => {
       sshClient.on('ready', () => resolve());
       sshClient.on('error', (err) => reject(err));
-      sshClient.connect(authConfig as Parameters<Client['connect']>[0]);
+      sshClient.connect(authConfig as Parameters<SshClient['connect']>[0]);
     });
 
     // 로컬 TCP 서버 생성 → SSH forwardOut으로 DB 연결

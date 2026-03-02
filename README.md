@@ -7,8 +7,7 @@
 
 **DB Manager** is a VS Code / Cursor extension that brings full-featured database management directly into your editor. Connect to MySQL, MariaDB, PostgreSQL, SQLite, and Redis — browse schemas, write queries, edit data, and export results without leaving your IDE.
 
-<!-- TODO: Add screenshot -->
-<!-- ![DB Manager overview](screenshots/screenshot1.png) -->
+![DB Manager overview](assets/screenshots/01.png)
 
 ---
 
@@ -27,23 +26,23 @@
 ## Features
 
 ### Connection Management
+
 - Save and manage multiple database connections
 - Organize connections into **custom groups** (folders)
 - **Color-coded** connections for visual identification
-- **SSH tunnel** support with password or private key authentication
+- **SSH tunnel** support with password or private key authentication (passphrase supported)
 - **SSL/TLS** support for secure remote connections
 - Passwords stored securely in the **OS keychain** via VS Code SecretStorage
-- Test connection before saving
-
-<!-- TODO: Add screenshot -->
-<!-- ![Connection management](screenshots/screenshot2.png) -->
+- Test connection and SSH tunnel before saving
+- **Create / Drop database** directly from the sidebar context menu
 
 ### Schema Browser
+
 Explore your database structure from the Explorer sidebar with a lazy-loading tree view.
 
 ```
-Connection Groups
-  └─ Connection (MySQL / PG / SQLite / Redis)
+Connection Groups (custom folders)
+  └─ Connection (MySQL / MariaDB / PG / SQLite / Redis)
        └─ Database
             └─ Schema (PostgreSQL only)
                  ├─ Tables
@@ -51,18 +50,19 @@ Connection Groups
                  │         ├─ Columns (type, nullable, default, PK, auto-increment)
                  │         ├─ Indexes (unique, primary, composite)
                  │         └─ Foreign Keys (with cascade rules)
-                 └─ Views
+                 ├─ Views
+                 └─ Routines / Triggers (PostgreSQL)
 ```
 
 - Click a connection to auto-connect and expand its children
 - Right-click context menus for every node level
 - View DDL for tables and views
 - Drop tables with confirmation
+- Server information display (version, charset, uptime, platform)
 
 ### SQL Query Editor
 
-<!-- TODO: Add screenshot -->
-<!-- ![Query editor](screenshots/screenshot3.png) -->
+![Query editor](assets/screenshots/02.png)
 
 - **Monaco Editor** with SQL syntax highlighting
 - **Execute** full query or selected text only (`Cmd+Enter` / `Ctrl+Enter`)
@@ -74,8 +74,7 @@ Connection Groups
 
 ### Table Data Viewer & Editor
 
-<!-- TODO: Add screenshot -->
-<!-- ![Table data editor](screenshots/screenshot4.png) -->
+![Table data editor](assets/screenshots/04.png)
 
 Powered by [AG Grid](https://www.ag-grid.com/) for high-performance data browsing:
 
@@ -83,11 +82,15 @@ Powered by [AG Grid](https://www.ag-grid.com/) for high-performance data browsin
 - **Resize** columns by dragging borders
 - **Pagination** with First / Previous / Next / Last navigation (100 rows per page)
 - **WHERE clause** filtering — apply custom filters without leaving the grid
-- **Inline editing** — double-click cells to INSERT, UPDATE, or DELETE rows
+- **Inline editing** — double-click cells to INSERT, UPDATE, or DELETE rows (requires primary key)
 - **Batch changes** — stage multiple edits and apply them all at once
+- **Row insertion** — add new rows via pinned top row
+- **Bulk delete** — select multiple rows with checkboxes and delete at once
 - **Undo** pending changes before saving
 
-### Data Export
+### Data Export & Import
+
+![Export dialog](assets/screenshots/03.png)
 
 Export query results or entire tables in multiple formats:
 
@@ -99,8 +102,27 @@ Export query results or entire tables in multiple formats:
 | **XML** | Proper escaping |
 | **Excel** | `.xlsx` via ExcelJS |
 
+Import data from files into tables:
+
+| Format | Support |
+|--------|---------|
+| **CSV** | Header row detection |
+| **JSON** | Array of objects |
+| **XML** | Row-based structure |
+| **Excel** | `.xlsx` parsing |
+
 - Auto-suggested filenames with timestamps
-- Progress tracking for large exports
+- Progress tracking for large exports/imports
+- Row count confirmation before import
+
+### SQL File Integration
+
+![SQL file integration](assets/screenshots/05.png)
+
+- Open `.sql` files directly in the DB Manager custom editor
+- Auto-generated metadata header with connection name, type, database, and schema
+- Execute queries with `Cmd+Enter` / `Ctrl+Enter` and view results inline
+- Save queries to `.sql` files with `Cmd+S` / `Ctrl+S`
 
 ### Backup & Restore
 
@@ -118,15 +140,24 @@ Back up and restore databases directly from the sidebar context menu.
 - Works through SSH tunnels
 
 ### Redis Browser
+
 - Select database (0–15) with key count per database
 - **SCAN-based** key browsing (safe for large databases — never uses `KEYS *`)
 - Tree view representation of keys with configurable delimiter
 - View, edit, and delete key values
 - TTL management (view and set expiration)
-- Add new keys with type selection
+- Add new keys with type selection (string, list, set, hash)
 
-### Server Information
-- View database version, character set, uptime, and platform details
+### Internationalization
+
+DB Manager supports multiple languages via VS Code's built-in localization:
+
+| Language | Status |
+|----------|--------|
+| English | Default |
+| Korean (ko) | Supported |
+| Japanese (ja) | Supported |
+| Chinese Simplified (zh-cn) | Supported |
 
 ---
 
@@ -138,7 +169,7 @@ Back up and restore databases directly from the sidebar context menu.
 4. Fill in connection details, click **Test Connection**, then **Save**.
 5. Click your saved connection to connect and browse schemas.
 6. Right-click a table to **View Data**, **Edit Data**, **Show DDL**, or **Export**.
-7. Right-click a database to open a **New Query** editor.
+7. Right-click a database to open a **New Query** editor, **Backup**, or **Restore**.
 
 ---
 
@@ -185,7 +216,7 @@ Press **F5** in VS Code to launch the Extension Development Host.
 ### Tech Stack
 
 | Layer | Technology |
-|-------|-----------|
+|-------|------------|
 | Extension host | TypeScript + VS Code Extension API |
 | Webview UI | React 18 + Zustand |
 | SQL editor | Monaco Editor |

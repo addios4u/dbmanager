@@ -4,6 +4,7 @@ import type { DatabaseType } from '@dbmanager/shared';
 import { useConnectionStore } from '../../stores/connection';
 import { useQueryStore } from '../../stores/query';
 import { postMessage } from '../../vscode-api';
+import { BuyMeACoffee } from '../BuyMeACoffee';
 
 interface QueryContextSelectorProps {
   connectionId: string;
@@ -116,6 +117,7 @@ export function QueryContextSelector({ connectionId, onConnectionChange }: Query
         gap: 16,
         background: 'var(--vscode-editorGroupHeader-tabsBackground)',
         overflow: 'hidden',
+        position: 'relative',
       }}
     >
       {/* DB Type Badge */}
@@ -140,7 +142,7 @@ export function QueryContextSelector({ connectionId, onConnectionChange }: Query
       )}
 
       {/* Connection Selector */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <span style={labelStyle}>{l10n.t('Connection')}</span>
         <select style={selectStyle} value={connectionId} onChange={handleConnectionChange}>
           {!connectionId && <option value="">{l10n.t('Select connection...')}</option>}
@@ -154,7 +156,7 @@ export function QueryContextSelector({ connectionId, onConnectionChange }: Query
 
       {/* Database Selector */}
       {databases.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={labelStyle}>{l10n.t('Database')}</span>
           <select style={selectStyle} value={database ?? ''} onChange={handleDatabaseChange}>
             <option value="">—</option>
@@ -169,7 +171,7 @@ export function QueryContextSelector({ connectionId, onConnectionChange }: Query
 
       {/* Schema Selector (PostgreSQL only) */}
       {dbType === 'postgresql' && schemas.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={labelStyle}>{l10n.t('Schema')}</span>
           <select style={selectStyle} value={schema ?? ''} onChange={handleSchemaChange}>
             <option value="">—</option>
@@ -181,6 +183,8 @@ export function QueryContextSelector({ connectionId, onConnectionChange }: Query
           </select>
         </div>
       )}
+
+      <BuyMeACoffee style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)' }} />
     </div>
   );
 }

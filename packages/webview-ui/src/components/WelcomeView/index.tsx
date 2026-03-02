@@ -1,4 +1,5 @@
 import React from 'react';
+import { BuyMeACoffee } from '../BuyMeACoffee';
 
 interface WelcomeViewProps {
   onAddConnection: () => void;
@@ -14,8 +15,12 @@ export function WelcomeView({ onAddConnection }: WelcomeViewProps) {
         justifyContent: 'center',
         height: '100%',
         gap: 20,
+        position: 'relative',
       }}
     >
+      <div style={{ position: 'absolute', top: 16, right: 16 }}>
+        <BuyMeACoffee />
+      </div>
       <div
         style={{
           display: 'flex',

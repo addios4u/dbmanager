@@ -3,8 +3,14 @@ src/
 esbuild.mjs
 tsconfig.json
 
-# Development
+# Development — exclude node_modules except native/external modules needed at runtime
 node_modules/
+!node_modules/ssh2/
+!node_modules/ssh2/**
+!node_modules/cpu-features/
+!node_modules/cpu-features/**
+!node_modules/better-sqlite3/
+!node_modules/better-sqlite3/**
 *.tsbuildinfo
 .vscode/
 

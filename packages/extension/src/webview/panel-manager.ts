@@ -353,6 +353,11 @@ export class WebviewPanelManager {
         break;
       }
 
+      case 'openExternal': {
+        void vscode.env.openExternal(vscode.Uri.parse(msg.url));
+        break;
+      }
+
       default:
         break;
     }

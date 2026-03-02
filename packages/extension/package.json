@@ -26,7 +26,6 @@
   ],
   "main": "./dist/extension.js",
   "l10n": "./l10n",
-  "activationEvents": [],
   "contributes": {
     "views": {
       "explorer": [

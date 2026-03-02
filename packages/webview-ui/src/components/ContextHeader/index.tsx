@@ -1,6 +1,7 @@
 import React from 'react';
 import type { DatabaseType } from '@dbmanager/shared';
 import { useConnectionStore } from '../../stores/connection';
+import { BuyMeACoffee } from '../BuyMeACoffee';
 
 interface ContextHeaderProps {
   connectionId: string;
@@ -128,7 +129,6 @@ export function ContextHeader({
             color: 'var(--vscode-descriptionForeground, #808080)',
             fontSize: 12,
             fontFamily: "'JetBrains Mono', var(--vscode-editor-font-family, monospace)",
-            marginLeft: 'auto',
             flexShrink: 0,
             whiteSpace: 'nowrap',
           }}
@@ -155,6 +155,8 @@ export function ContextHeader({
           {badge}
         </span>
       )}
+
+      <BuyMeACoffee />
     </div>
   );
 }

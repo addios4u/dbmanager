@@ -62,7 +62,8 @@ export type WebviewMessage =
   | { type: 'getSchemas'; connectionId: string; database?: string }
   | { type: 'switchQueryContext'; connectionId: string; database?: string; schema?: string }
   | { type: 'documentChange'; content: string }
-  | { type: 'saveQueryToFile'; content: string };
+  | { type: 'saveQueryToFile'; content: string }
+  | { type: 'openExternal'; url: string };
 
 // Extension → Webview
 export type ExtensionMessage =
