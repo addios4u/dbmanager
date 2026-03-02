@@ -7,7 +7,7 @@
 
 **DB Manager** is a VS Code / Cursor extension that brings full-featured database management directly into your editor. Connect to MySQL, MariaDB, PostgreSQL, SQLite, and Redis — browse schemas, write queries, edit data, and export results without leaving your IDE.
 
-![DB Manager overview](assets/screenshots/01.png)
+![DB Manager overview](https://raw.githubusercontent.com/addios4u/dbmanager/main/assets/screenshots/01.png)
 
 ---
 
@@ -62,7 +62,7 @@ Connection Groups (custom folders)
 
 ### SQL Query Editor
 
-![Query editor](assets/screenshots/02.png)
+![Query editor](https://raw.githubusercontent.com/addios4u/dbmanager/main/assets/screenshots/02.png)
 
 - **Monaco Editor** with SQL syntax highlighting
 - **Execute** full query or selected text only (`Cmd+Enter` / `Ctrl+Enter`)
@@ -74,7 +74,7 @@ Connection Groups (custom folders)
 
 ### Table Data Viewer & Editor
 
-![Table data editor](assets/screenshots/04.png)
+![Table data editor](https://raw.githubusercontent.com/addios4u/dbmanager/main/assets/screenshots/04.png)
 
 Powered by [AG Grid](https://www.ag-grid.com/) for high-performance data browsing:
 
@@ -90,7 +90,7 @@ Powered by [AG Grid](https://www.ag-grid.com/) for high-performance data browsin
 
 ### Data Export & Import
 
-![Export dialog](assets/screenshots/03.png)
+![Export dialog](https://raw.githubusercontent.com/addios4u/dbmanager/main/assets/screenshots/03.png)
 
 Export query results or entire tables in multiple formats:
 
@@ -117,7 +117,7 @@ Import data from files into tables:
 
 ### SQL File Integration
 
-![SQL file integration](assets/screenshots/05.png)
+![SQL file integration](https://raw.githubusercontent.com/addios4u/dbmanager/main/assets/screenshots/05.png)
 
 - Open `.sql` files directly in the DB Manager custom editor
 - Auto-generated metadata header with connection name, type, database, and schema

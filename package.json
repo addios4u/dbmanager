@@ -1,9 +1,9 @@
 {
   "name": "dbmanager",
-  "displayName": "DB Manager",
+  "displayName": "DBManager",
   "description": "Database management tool for VS Code - MySQL, MariaDB, PostgreSQL, SQLite, Redis",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "addios4u",
   "packageManager": "pnpm@10.26.1",
   "license": "MIT",
@@ -37,7 +37,7 @@
     "lint:fix": "eslint \"packages/*/src/**/*.{ts,tsx}\" --fix",
     "format": "prettier --write \"packages/*/src/**/*.{ts,tsx,css}\"",
     "rebuild:sqlite": "npx @electron/rebuild --version 39.4.0 --module-dir node_modules/.pnpm/better-sqlite3@12.6.2/node_modules/better-sqlite3 --only better-sqlite3",
-    "package": "pnpm build && mkdir -p out && cd packages/extension && cp ../../LICENSE . && pnpm exec vsce package --no-dependencies -o ../../out/dbmanager-$npm_package_version.vsix && rm LICENSE"
+    "package": "pnpm build && mkdir -p out && cd packages/extension && cp ../../LICENSE ../../README.md . && pnpm exec vsce package --no-dependencies -o ../../out/dbmanager-$npm_package_version.vsix && rm LICENSE README.md"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
