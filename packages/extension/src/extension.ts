@@ -22,6 +22,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const treeView = vscode.window.createTreeView(VIEW_IDS.CONNECTIONS, {
     treeDataProvider: treeProvider,
     showCollapseAll: true,
+    dragAndDropController: treeProvider,
   });
   context.subscriptions.push(treeView);
 

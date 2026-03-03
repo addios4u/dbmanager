@@ -2,7 +2,7 @@
   "name": "dbmanager",
   "displayName": "DBManager",
   "description": "Database management tool for VS Code - MySQL, MariaDB, PostgreSQL, SQLite, Redis",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "publisher": "addios4u",
   "license": "MIT",
   "repository": {

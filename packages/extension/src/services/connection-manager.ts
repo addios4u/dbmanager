@@ -79,6 +79,22 @@ export class ConnectionManager {
     this._onDidChangeConnections.fire();
   }
 
+  async reorderConnections(orderedIds: string[]): Promise<void> {
+    const connections = this.getConnections();
+    const byId = new Map(connections.map((c) => [c.id, c]));
+    const reordered: ConnectionConfig[] = [];
+    for (const id of orderedIds) {
+      const c = byId.get(id);
+      if (c) reordered.push(c);
+    }
+    // orderedIds에 없는 연결은 뒤에 유지
+    for (const c of connections) {
+      if (!orderedIds.includes(c.id)) reordered.push(c);
+    }
+    await this.context.globalState.update(CONNECTIONS_KEY, reordered);
+    this._onDidChangeConnections.fire();
+  }
+
   async deleteConnection(id: string): Promise<void> {
     // Disconnect if active
     if (this.connectedIds.has(id)) {

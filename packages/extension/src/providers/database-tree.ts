@@ -144,7 +144,14 @@ function getIconId(
   }
 }
 
-export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode> {
+const DRAG_MIME = 'application/vnd.code.tree.dbmanager.connections';
+
+export class DatabaseTreeProvider
+  implements vscode.TreeDataProvider<DbTreeNode>, vscode.TreeDragAndDropController<DbTreeNode>
+{
+  // TreeDragAndDropController
+  readonly dropMimeTypes = [DRAG_MIME];
+  readonly dragMimeTypes = [DRAG_MIME];
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<DbTreeNode | undefined | null>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
   private readonly connectingIds = new Set<string>();
@@ -167,6 +174,42 @@ export class DatabaseTreeProvider implements vscode.TreeDataProvider<DbTreeNode>
 
   refresh(node?: DbTreeNode): void {
     this._onDidChangeTreeData.fire(node ?? null);
+  }
+
+  handleDrag(source: readonly DbTreeNode[], dataTransfer: vscode.DataTransfer): void {
+    const connectionNodes = source.filter((n) => n.nodeType === 'connection');
+    if (connectionNodes.length === 0) return;
+    dataTransfer.set(
+      DRAG_MIME,
+      new vscode.DataTransferItem(connectionNodes.map((n) => n.connectionId)),
+    );
+  }
+
+  async handleDrop(target: DbTreeNode | undefined, dataTransfer: vscode.DataTransfer): Promise<void> {
+    const item = dataTransfer.get(DRAG_MIME);
+    if (!item) return;
+    const draggedIds = item.value as string[];
+    if (!draggedIds || draggedIds.length === 0) return;
+
+    // connection 노드 위에만 드롭 허용 (또는 root 빈 공간)
+    if (target && target.nodeType !== 'connection') return;
+
+    const connections = this.connectionManager.getConnections();
+    const currentIds = connections.map((c) => c.id);
+
+    // 드래그된 항목을 제거한 리스트
+    const remaining = currentIds.filter((id) => !draggedIds.includes(id));
+
+    if (target) {
+      // 타겟 connection 앞에 삽입
+      const targetIdx = remaining.indexOf(target.connectionId);
+      remaining.splice(targetIdx, 0, ...draggedIds);
+    } else {
+      // 빈 공간 → 맨 끝에 추가
+      remaining.push(...draggedIds);
+    }
+
+    await this.connectionManager.reorderConnections(remaining);
   }
 
   getTreeItem(node: DbTreeNode): vscode.TreeItem {
