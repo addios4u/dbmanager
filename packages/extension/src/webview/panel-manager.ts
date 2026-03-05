@@ -8,6 +8,8 @@ import { PAGE_SIZE } from '@dbmanager/shared';
 import type { ConnectionManager } from '../services/connection-manager.js';
 import type { DatabaseAdapter, RedisAdapter } from '../adapters/base.js';
 import { testConnection, testSshTunnel } from '../services/connection-tester.js';
+import { AiQueryService } from '../ai/aiQueryService.js';
+import { getSchemaText, invalidateSchemaCache } from '../ai/schemaSerializer.js';
 
 /** DB 드라이버 에러에서 유용한 메시지를 추출한다. */
 function formatError(err: unknown): string {
@@ -55,10 +57,12 @@ export class WebviewPanelManager {
   readonly context: vscode.ExtensionContext;
   readonly connectionManager: ConnectionManager;
   private readonly panels = new Map<string, vscode.WebviewPanel>();
+  private readonly aiService: AiQueryService;
 
   constructor(context: vscode.ExtensionContext, connectionManager: ConnectionManager) {
     this.context = context;
     this.connectionManager = connectionManager;
+    this.aiService = new AiQueryService(context.secrets);
   }
 
   openQueryEditor(connectionId: string, database?: string, schema?: string): void {
@@ -224,6 +228,7 @@ export class WebviewPanelManager {
       }
 
       case 'disconnect': {
+        invalidateSchemaCache(msg.connectionId);
         void this.connectionManager.disconnect(msg.connectionId);
         break;
       }
@@ -355,6 +360,26 @@ export class WebviewPanelManager {
 
       case 'openExternal': {
         void vscode.env.openExternal(vscode.Uri.parse(msg.url));
+        break;
+      }
+
+      case 'aiGenerateQuery': {
+        void this.handleAiGenerateQuery(panel, meta, msg.connectionId, msg.prompt, msg.provider);
+        break;
+      }
+
+      case 'aiRefineQuery': {
+        void this.handleAiRefineQuery(panel, meta, msg.connectionId, msg.sql, msg.instruction, msg.provider);
+        break;
+      }
+
+      case 'aiConfigureKey': {
+        void this.handleAiConfigureKey(panel, msg.provider, msg.action, msg.key);
+        break;
+      }
+
+      case 'aiGetKeyStatus': {
+        void this.handleAiGetKeyStatus(panel, msg.provider);
         break;
       }
 
@@ -1700,6 +1725,98 @@ export class WebviewPanelManager {
       panel.dispose();
     }
     this.panels.clear();
+  }
+
+  // ---------------------------------------------------------------------------
+  // AI Query handlers
+  // ---------------------------------------------------------------------------
+
+  private async handleAiGenerateQuery(
+    panel: vscode.WebviewPanel,
+    meta: PanelMeta,
+    connectionId: string,
+    prompt: string,
+    provider: 'openai' | 'google',
+  ): Promise<void> {
+    const adapter = this.connectionManager.getAdapter(connectionId);
+    const config = this.connectionManager.getConnection(connectionId);
+    if (!adapter || !config || 'scan' in adapter) {
+      const errMsg: ExtensionMessage = { type: 'aiQueryError', error: 'No active SQL connection' };
+      void panel.webview.postMessage(errMsg);
+      return;
+    }
+    try {
+      const schemaText = await getSchemaText(
+        connectionId,
+        adapter as DatabaseAdapter,
+        config.type,
+        meta.schema,
+        meta.database,
+      );
+      const sql = await this.aiService.generateQuery(prompt, schemaText, config.type, provider);
+      const resultMsg: ExtensionMessage = { type: 'aiQueryResult', sql, mode: 'generate' };
+      void panel.webview.postMessage(resultMsg);
+    } catch (err) {
+      const errMsg: ExtensionMessage = { type: 'aiQueryError', error: formatError(err) };
+      void panel.webview.postMessage(errMsg);
+    }
+  }
+
+  private async handleAiRefineQuery(
+    panel: vscode.WebviewPanel,
+    meta: PanelMeta,
+    connectionId: string,
+    sql: string,
+    instruction: string | undefined,
+    provider: 'openai' | 'google',
+  ): Promise<void> {
+    const adapter = this.connectionManager.getAdapter(connectionId);
+    const config = this.connectionManager.getConnection(connectionId);
+    if (!adapter || !config || 'scan' in adapter) {
+      const errMsg: ExtensionMessage = { type: 'aiQueryError', error: 'No active SQL connection' };
+      void panel.webview.postMessage(errMsg);
+      return;
+    }
+    try {
+      const schemaText = await getSchemaText(
+        connectionId,
+        adapter as DatabaseAdapter,
+        config.type,
+        meta.schema,
+        meta.database,
+      );
+      const refined = await this.aiService.refineQuery(sql, instruction, schemaText, config.type, provider);
+      const resultMsg: ExtensionMessage = { type: 'aiQueryResult', sql: refined, mode: 'refine' };
+      void panel.webview.postMessage(resultMsg);
+    } catch (err) {
+      const errMsg: ExtensionMessage = { type: 'aiQueryError', error: formatError(err) };
+      void panel.webview.postMessage(errMsg);
+    }
+  }
+
+  private async handleAiConfigureKey(
+    panel: vscode.WebviewPanel,
+    provider: 'openai' | 'google',
+    action: 'save' | 'remove',
+    key?: string,
+  ): Promise<void> {
+    if (action === 'save' && key) {
+      await this.aiService.setApiKey(provider, key);
+    } else if (action === 'remove') {
+      await this.aiService.deleteApiKey(provider);
+    }
+    const hasKey = await this.aiService.hasApiKey(provider);
+    const statusMsg: ExtensionMessage = { type: 'aiKeyStatus', provider, hasKey };
+    void panel.webview.postMessage(statusMsg);
+  }
+
+  private async handleAiGetKeyStatus(
+    panel: vscode.WebviewPanel,
+    provider: 'openai' | 'google',
+  ): Promise<void> {
+    const hasKey = await this.aiService.hasApiKey(provider);
+    const statusMsg: ExtensionMessage = { type: 'aiKeyStatus', provider, hasKey };
+    void panel.webview.postMessage(statusMsg);
   }
 }
 

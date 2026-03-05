@@ -63,7 +63,11 @@ export type WebviewMessage =
   | { type: 'switchQueryContext'; connectionId: string; database?: string; schema?: string }
   | { type: 'documentChange'; content: string }
   | { type: 'saveQueryToFile'; content: string }
-  | { type: 'openExternal'; url: string };
+  | { type: 'openExternal'; url: string }
+  | { type: 'aiGenerateQuery'; connectionId: string; prompt: string; provider: 'openai' | 'google' }
+  | { type: 'aiRefineQuery'; connectionId: string; sql: string; instruction?: string; provider: 'openai' | 'google' }
+  | { type: 'aiConfigureKey'; provider: 'openai' | 'google'; action: 'save' | 'remove'; key?: string }
+  | { type: 'aiGetKeyStatus'; provider: 'openai' | 'google' };
 
 // Extension → Webview
 export type ExtensionMessage =
@@ -110,7 +114,10 @@ export type ExtensionMessage =
   | { type: 'databaseList'; connectionId: string; databases: string[] }
   | { type: 'schemaList'; connectionId: string; schemas: string[] }
   | { type: 'documentContent'; content: string }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  | { type: 'aiQueryResult'; sql: string; mode: 'generate' | 'refine' }
+  | { type: 'aiQueryError'; error: string }
+  | { type: 'aiKeyStatus'; provider: 'openai' | 'google'; hasKey: boolean };
 
 // Re-export used types to avoid unused import warnings
 export type { ConnectionConfig, ConnectionInfo, QueryResult, TableEdit, RedisKeyInfo, RedisValue, SchemaInfo, DatabaseInfo, ColumnMeta, ExportOptions };

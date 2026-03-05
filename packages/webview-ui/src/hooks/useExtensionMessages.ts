@@ -6,6 +6,7 @@ import { useQueryStore } from '../stores/query';
 import { useSchemaStore } from '../stores/schema';
 import { useTableDataStore } from '../stores/tableData';
 import { useRedisStore } from '../stores/redis';
+import { useAiStore } from '../stores/ai';
 
 /**
  * Central message dispatcher: listens for all ExtensionMessage events
@@ -22,6 +23,7 @@ export function useExtensionMessages(): void {
   const { setDatabases } = useSchemaStore();
   const { setTableData, setLoading: setTableLoading } = useTableDataStore();
   const { setKeys, setSelectedValue, setScanning, setLoadingValue } = useRedisStore();
+  const { setGenerating: setAiGenerating, setError: setAiError, setKeyStatus, setPendingResult } = useAiStore();
 
   useEffect(() => {
     const handler = (event: MessageEvent) => {
@@ -111,6 +113,21 @@ export function useExtensionMessages(): void {
           // Handled by their respective components directly
           break;
 
+        case 'aiQueryResult':
+          setAiGenerating(false);
+          setAiError(null);
+          setPendingResult({ sql: msg.sql, mode: msg.mode });
+          break;
+
+        case 'aiQueryError':
+          setAiGenerating(false);
+          setAiError(msg.error);
+          break;
+
+        case 'aiKeyStatus':
+          setKeyStatus(msg.provider, msg.hasKey);
+          break;
+
         default:
           break;
       }
@@ -134,5 +151,9 @@ export function useExtensionMessages(): void {
     setSelectedValue,
     setScanning,
     setLoadingValue,
+    setAiGenerating,
+    setAiError,
+    setKeyStatus,
+    setPendingResult,
   ]);
 }

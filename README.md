@@ -71,6 +71,57 @@ Connection Groups (custom folders)
 - **Query history** — browse and re-run up to 1,000 recent queries
 - **SQL file integration** — open `.sql` files directly in the DB Manager query editor with connection context metadata
 - **Execution stats** — elapsed time, affected rows, error details
+- **✨ AI Query Generator** — generate and refine SQL queries using natural language (see below)
+
+### AI Query Generator
+
+Generate SQL from natural language or refine existing queries — powered by OpenAI or Google Gemini, with full awareness of your database schema.
+
+#### Setup
+
+1. Click the **✨ AI** button in the query editor toolbar.
+2. Click the **⚙** (gear) icon to open AI Settings.
+3. Select a provider (**OpenAI** or **Google**) and enter your API key.
+   - API keys are stored securely in the **OS keychain** via VS Code SecretStorage.
+4. The status dot next to ⚙ turns **green** when a key is configured.
+
+| Provider | Model | API Key |
+|----------|-------|---------|
+| OpenAI | `gpt-4o-mini` | [platform.openai.com](https://platform.openai.com/api-keys) |
+| Google | `gemini-2.0-flash` | [aistudio.google.com](https://aistudio.google.com/app/apikey) |
+
+#### Generate mode
+
+Write a query from scratch using natural language.
+
+1. Open the AI panel with **✨ AI**.
+2. Select the **Generate** tab.
+3. Type your request in natural language.
+4. Choose where to insert the result:
+   - **Append to editor** (default) — adds the generated SQL below the existing content
+   - **Replace editor** — replaces the editor content (connection info comments at the top are preserved)
+5. Click **✨ Generate** (or `Cmd+Enter` / `Ctrl+Enter` inside the prompt box).
+
+> **Example:** *"Get all users who placed no orders in the last 7 days, ordered by email"*
+
+#### Refine mode
+
+Fix or improve an existing query based on your schema.
+
+1. **Select text** in the Monaco editor — the AI panel switches to **Refine** mode automatically.
+2. Optionally add an instruction (e.g. *"Use proper aliases"*, *"Add pagination"*, *"Fix column names"*).
+3. Click **✨ Refine**.
+4. The selected text is replaced in-place with the refined SQL.
+
+#### How schema context works
+
+When you generate or refine a query, DB Manager automatically:
+
+1. Fetches the full table and column list for the current connection/database/schema.
+2. Serializes it as DDL-style text (table names, column types, nullability, primary keys, etc.).
+3. Sends it as context to the AI — the model can therefore generate correct column names, join conditions, and dialect-specific syntax without any manual schema description.
+
+Schema context is cached for **5 minutes** and invalidated automatically on disconnect.
 
 ### Table Data Viewer & Editor
 
@@ -179,6 +230,7 @@ DB Manager supports multiple languages via VS Code's built-in localization:
 |----------|--------|
 | `Cmd+Enter` / `Ctrl+Enter` | Execute query (or selected text) |
 | `Cmd+S` / `Ctrl+S` | Save query to `.sql` file |
+| `Cmd+Enter` / `Ctrl+Enter` (in AI prompt) | Generate / Refine query |
 
 ---
 
