@@ -7,6 +7,7 @@ import { useConnectionStore } from '../../stores/connection';
 import { useAiStore } from '../../stores/ai';
 import { postMessage } from '../../vscode-api';
 import { AIQueryPanel } from '../AIQueryPanel';
+import { splitSqlStatements } from '@dbmanager/shared/src/sqlSplitter';
 
 // 삽입된 SQL 텍스트를 Monaco 에디터에서 자동 선택한다.
 function selectSql(editor: monacoEditor.IStandaloneCodeEditor, sql: string): void {
@@ -71,6 +72,7 @@ export function QueryEditor({ connectionId }: QueryEditorProps) {
   const { connections } = useConnectionStore();
   const editorRef = useRef<monacoEditor.IStandaloneCodeEditor | null>(null);
   const executeRef = useRef<() => void>(() => {});
+  const executeAllRef = useRef<() => void>(() => {});
 
   const isPanelOpen = useAiStore((s) => s.isPanelOpen);
   const pendingResult = useAiStore((s) => s.pendingResult);
@@ -161,9 +163,34 @@ export function QueryEditor({ connectionId }: QueryEditorProps) {
     postMessage({ type: 'executeQuery', connectionId, sql: sqlToRun });
   }, [connectionId]);
 
+  const executeAllQueries = useCallback(() => {
+    const { sql: currentSql, isExecuting: busy } = useQueryStore.getState();
+    if (busy) return;
+    if (!currentSql.trim()) return;
+
+    const sqls = splitSqlStatements(currentSql);
+    if (sqls.length === 0) return;
+
+    // 단일 스테이트먼트면 일반 실행으로 처리
+    if (sqls.length === 1) {
+      const queryId = `q-${Date.now()}`;
+      useQueryStore.getState().setExecuting(true, queryId);
+      postMessage({ type: 'executeQuery', connectionId, sql: sqls[0]! });
+      return;
+    }
+
+    const queryId = `q-${Date.now()}`;
+    useQueryStore.getState().setExecuting(true, queryId);
+    postMessage({ type: 'executeMultipleQueries', connectionId, sqls, queryId });
+  }, [connectionId]);
+
   useEffect(() => {
     executeRef.current = executeQuery;
   }, [executeQuery]);
+
+  useEffect(() => {
+    executeAllRef.current = executeAllQueries;
+  }, [executeAllQueries]);
 
   const handleMount: OnMount = useCallback(
     (editor, monaco) => {
@@ -172,6 +199,11 @@ export function QueryEditor({ connectionId }: QueryEditorProps) {
       // Ctrl+Enter / Cmd+Enter to execute
       editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
         executeRef.current();
+      });
+
+      // Ctrl+Shift+Enter / Cmd+Shift+Enter to run all statements
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.Enter, () => {
+        executeAllRef.current();
       });
 
       // Ctrl+V / Cmd+V paste workaround
@@ -254,10 +286,19 @@ export function QueryEditor({ connectionId }: QueryEditorProps) {
         <button
           onClick={executeQuery}
           disabled={isExecuting || !sql.trim()}
-          title={l10n.t('Execute query (Ctrl+Enter) — runs selected text if any')}
+          title={l10n.t('Execute query (Ctrl+Enter) — runs selected text if any, otherwise entire editor content as one statement')}
           style={{ opacity: isExecuting || !sql.trim() ? 0.5 : 1 }}
         >
           {isExecuting ? l10n.t('Running...') : l10n.t('Run')}
+        </button>
+        <button
+          className="secondary"
+          onClick={executeAllQueries}
+          disabled={isExecuting || !sql.trim()}
+          title={l10n.t('Run All (Ctrl+Shift+Enter) — split by semicolons and execute each statement sequentially. Stops on first error.')}
+          style={{ opacity: isExecuting || !sql.trim() ? 0.5 : 1 }}
+        >
+          {l10n.t('Run All')}
         </button>
         {isExecuting && (
           <button

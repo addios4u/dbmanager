@@ -18,7 +18,7 @@ import { useAiStore } from '../stores/ai';
  */
 export function useExtensionMessages(): void {
   const { setConnections, setActiveConnection } = useConnectionStore();
-  const { setResults, setError: setResultsError } = useResultsStore();
+  const { setResults, setMultiResults, setError: setResultsError } = useResultsStore();
   const { setSql, setExecuting, setDatabases: setQueryDatabases, setSchemas: setQuerySchemas } = useQueryStore();
   const { setDatabases } = useSchemaStore();
   const { setTableData, setLoading: setTableLoading } = useTableDataStore();
@@ -50,6 +50,11 @@ export function useExtensionMessages(): void {
         case 'queryError':
           setExecuting(false);
           setResultsError(msg.error);
+          break;
+
+        case 'multiQueryResult':
+          setExecuting(false);
+          setMultiResults(msg.results, msg.totalTime);
           break;
 
         case 'schemaData':
@@ -139,6 +144,7 @@ export function useExtensionMessages(): void {
     setConnections,
     setActiveConnection,
     setResults,
+    setMultiResults,
     setResultsError,
     setSql,
     setExecuting,

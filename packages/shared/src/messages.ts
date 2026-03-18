@@ -67,7 +67,8 @@ export type WebviewMessage =
   | { type: 'aiGenerateQuery'; connectionId: string; prompt: string; provider: 'openai' | 'google' }
   | { type: 'aiRefineQuery'; connectionId: string; sql: string; instruction?: string; provider: 'openai' | 'google' }
   | { type: 'aiConfigureKey'; provider: 'openai' | 'google'; action: 'save' | 'remove'; key?: string }
-  | { type: 'aiGetKeyStatus'; provider: 'openai' | 'google' };
+  | { type: 'aiGetKeyStatus'; provider: 'openai' | 'google' }
+  | { type: 'executeMultipleQueries'; connectionId: string; sqls: string[]; queryId: string };
 
 // Extension → Webview
 export type ExtensionMessage =
@@ -117,7 +118,21 @@ export type ExtensionMessage =
   | { type: 'error'; message: string }
   | { type: 'aiQueryResult'; sql: string; mode: 'generate' | 'refine' }
   | { type: 'aiQueryError'; error: string }
-  | { type: 'aiKeyStatus'; provider: 'openai' | 'google'; hasKey: boolean };
+  | { type: 'aiKeyStatus'; provider: 'openai' | 'google'; hasKey: boolean }
+  | {
+      type: 'multiQueryResult';
+      results: {
+        index: number;
+        sql: string;
+        status: 'ok' | 'error';
+        executionTime: number;
+        affectedRows?: number;
+        columns?: ColumnMeta[];
+        rows?: Record<string, unknown>[];
+        error?: string;
+      }[];
+      totalTime: number;
+    };
 
 // Re-export used types to avoid unused import warnings
 export type { ConnectionConfig, ConnectionInfo, QueryResult, TableEdit, RedisKeyInfo, RedisValue, SchemaInfo, DatabaseInfo, ColumnMeta, ExportOptions };

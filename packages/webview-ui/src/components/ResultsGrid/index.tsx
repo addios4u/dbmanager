@@ -8,6 +8,7 @@ import { useResultsStore } from '../../stores/results';
 import { useQueryStore } from '../../stores/query';
 import { postMessage } from '../../vscode-api';
 import { toCSV, toJSON, toXML } from '../../utils/export';
+import { MultiQuerySummary } from '../MultiQuerySummary';
 
 type ExportFormat = 'csv' | 'xlsx' | 'json' | 'xml';
 
@@ -19,7 +20,7 @@ const formatLabels: Record<ExportFormat, string> = {
 };
 
 export function ResultsGrid() {
-  const { columns, rows, totalRows, executionTime, error } = useResultsStore();
+  const { columns, rows, totalRows, executionTime, error, multiResults, multiTotalTime } = useResultsStore();
   const { isExecuting } = useQueryStore();
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [exportStatus, setExportStatus] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -153,6 +154,11 @@ export function ResultsGrid() {
     );
   }
 
+  // 멀티 쿼리 결과가 있지만 SELECT 결과가 없는 경우 (DDL/DML만 실행)
+  if (multiResults && columns.length === 0) {
+    return <MultiQuerySummary results={multiResults} totalTime={multiTotalTime} />;
+  }
+
   if (columns.length === 0) {
     return (
       <div
@@ -184,6 +190,7 @@ export function ResultsGrid() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {multiResults && <MultiQuerySummary results={multiResults} totalTime={multiTotalTime} />}
       <div
         style={{
           display: 'flex',

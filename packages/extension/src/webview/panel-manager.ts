@@ -57,6 +57,7 @@ export class WebviewPanelManager {
   readonly context: vscode.ExtensionContext;
   readonly connectionManager: ConnectionManager;
   private readonly panels = new Map<string, vscode.WebviewPanel>();
+  private readonly cancelledMultiQueries = new Set<string>();
   private readonly aiService: AiQueryService;
 
   constructor(context: vscode.ExtensionContext, connectionManager: ConnectionManager) {
@@ -194,6 +195,11 @@ export class WebviewPanelManager {
 
       case 'executeQuery': {
         void this.handleExecuteQuery(panel, msg.connectionId, msg.sql, meta);
+        break;
+      }
+
+      case 'executeMultipleQueries': {
+        void this.handleExecuteMultipleQueries(panel, msg.connectionId, msg.sqls, msg.queryId, meta);
         break;
       }
 
@@ -537,7 +543,89 @@ export class WebviewPanelManager {
     }
   }
 
+  private async handleExecuteMultipleQueries(
+    panel: vscode.WebviewPanel,
+    connectionId: string,
+    sqls: string[],
+    queryId: string,
+    meta?: PanelMeta,
+  ): Promise<void> {
+    const dbAdapter = await this.ensureConnected(connectionId);
+    if (!dbAdapter) {
+      const errMsg: ExtensionMessage = { type: 'error', message: 'Failed to connect to database. Please check connection settings.' };
+      void panel.webview.postMessage(errMsg);
+      return;
+    }
+
+    // Restore database/schema context
+    if (meta?.database) {
+      const config = this.connectionManager.getConnection(connectionId);
+      if (config?.type === 'postgresql') {
+        const pgAdapter = dbAdapter as DatabaseAdapter & { switchDatabase?(db: string): Promise<void> };
+        if (pgAdapter.switchDatabase) {
+          await pgAdapter.switchDatabase(meta.database);
+        }
+      } else if (config?.type === 'mysql' || config?.type === 'mariadb') {
+        await dbAdapter.execute(`USE ${quoteIdentifier(meta.database, config.type)}`);
+      }
+      if (meta.schema && config?.type === 'postgresql') {
+        await dbAdapter.execute(`SET search_path TO ${quoteIdentifier(meta.schema, config.type)}`);
+      }
+    }
+
+    const totalStart = Date.now();
+    const results: {
+      index: number;
+      sql: string;
+      status: 'ok' | 'error';
+      executionTime: number;
+      affectedRows?: number;
+      columns?: ColumnMeta[];
+      rows?: Record<string, unknown>[];
+      error?: string;
+    }[] = [];
+
+    for (let i = 0; i < sqls.length; i++) {
+      // 취소 요청이 들어왔으면 루프 종료
+      if (this.cancelledMultiQueries.has(queryId)) {
+        break;
+      }
+
+      const stmt = sqls[i]!;
+      try {
+        const result = await dbAdapter.execute(stmt);
+        results.push({
+          index: i,
+          sql: stmt,
+          status: 'ok',
+          executionTime: result.executionTime,
+          affectedRows: result.affectedRows,
+          columns: result.columns,
+          rows: result.rows,
+        });
+      } catch (err) {
+        results.push({
+          index: i,
+          sql: stmt,
+          status: 'error',
+          executionTime: 0,
+          error: formatError(err),
+        });
+        // 첫 번째 에러에서 중단 (이후 스테이트먼트가 이전 실패에 의존할 수 있음)
+        break;
+      }
+    }
+
+    this.cancelledMultiQueries.delete(queryId);
+    const totalTime = Date.now() - totalStart;
+    const resultMsg: ExtensionMessage = { type: 'multiQueryResult', results, totalTime };
+    void panel.webview.postMessage(resultMsg);
+  }
+
   private async handleCancelQuery(queryId: string, connectionId?: string): Promise<void> {
+    // multi-query 실행 중이라면 취소 플래그 설정
+    this.cancelledMultiQueries.add(queryId);
+
     if (!connectionId) return;
     const adapter = this.connectionManager.getAdapter(connectionId);
     if (adapter && 'cancel' in adapter) {
