@@ -165,6 +165,18 @@ export function TableDataView({ connectionId, table, schema, database }: TableDa
     return () => window.removeEventListener('message', handler);
   }, [fetchData]);
 
+  // F5 새로고침
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== 'F5') return;
+      if (editingCell || showDeleteConfirm || statusError) return;
+      e.preventDefault();
+      handleRefresh();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [editingCell, showDeleteConfirm, statusError, handleRefresh]);
+
   const handleApplyWhere = useCallback(() => {
     setAppliedWhere(whereClause);
     fetchData({ offset: 0, where: whereClause });
