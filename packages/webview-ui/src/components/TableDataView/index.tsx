@@ -169,13 +169,13 @@ export function TableDataView({ connectionId, table, schema, database }: TableDa
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key !== 'F5') return;
-      if (editingCell || showDeleteConfirm || statusError) return;
+      if (editingCell || showDeleteConfirm || statusError || insertingRow || isLoading) return;
       e.preventDefault();
       handleRefresh();
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [editingCell, showDeleteConfirm, statusError, handleRefresh]);
+  }, [editingCell, showDeleteConfirm, statusError, insertingRow, isLoading, handleRefresh]);
 
   const handleApplyWhere = useCallback(() => {
     setAppliedWhere(whereClause);
