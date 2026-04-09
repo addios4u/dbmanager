@@ -120,6 +120,7 @@
   "Update": "更新",
   "Test Connection": "测试连接",
   "Refresh": "刷新",
+  "Refresh (F5)": "刷新 (F5)",
   "Import": "导入",
   "Importing... {0}": "导入中... {0}",
   "Import complete: {0} rows": "导入完成: {0} 行",

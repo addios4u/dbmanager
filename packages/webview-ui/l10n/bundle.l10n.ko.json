@@ -120,6 +120,7 @@
   "Update": "업데이트",
   "Test Connection": "연결 테스트",
   "Refresh": "새로고침",
+  "Refresh (F5)": "새로고침 (F5)",
   "Import": "가져오기",
   "Importing... {0}": "가져오는 중... {0}",
   "Import complete: {0} rows": "가져오기 완료: {0}행",
