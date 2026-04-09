@@ -91,6 +91,15 @@ export function TableDataView({ connectionId, table, schema, database }: TableDa
     [connectionId, table, schema, appliedWhere],
   );
 
+  const handleRefresh = useCallback(() => {
+    const whereChanged = whereClause !== appliedWhere;
+    setAppliedWhere(whereClause);
+    fetchData({
+      offset: whereChanged ? 0 : offset,
+      where: whereClause,
+    });
+  }, [whereClause, appliedWhere, offset, fetchData]);
+
   useEffect(() => {
     fetchData();
   }, [connectionId, table, schema]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -497,7 +506,7 @@ export function TableDataView({ connectionId, table, schema, database }: TableDa
         <button
           className="secondary"
           style={{ fontSize: 11, padding: '2px 8px', flexShrink: 0 }}
-          onClick={() => fetchData({ offset })}
+          onClick={handleRefresh}
           disabled={isLoading}
           title={l10n.t('Refresh')}
         >
