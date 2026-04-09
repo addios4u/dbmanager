@@ -165,17 +165,16 @@ export function TableDataView({ connectionId, table, schema, database }: TableDa
     return () => window.removeEventListener('message', handler);
   }, [fetchData]);
 
-  // F5 새로고침
+  // F5 새로고침 (VS Code 커맨드 → postMessage 방식)
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key !== 'F5') return;
-      if (editingCell || showDeleteConfirm || statusError || insertingRow || isLoading) return;
-      e.preventDefault();
+    const handler = (event: MessageEvent) => {
+      const msg = event.data as { type?: string };
+      if (msg?.type !== 'refreshTableData') return;
       handleRefresh();
     };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [editingCell, showDeleteConfirm, statusError, insertingRow, isLoading, handleRefresh]);
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, [handleRefresh]);
 
   const handleApplyWhere = useCallback(() => {
     setAppliedWhere(whereClause);

@@ -235,6 +235,9 @@ export function activate(context: vscode.ExtensionContext): void {
         vscode.window.showErrorMessage(vscode.l10n.t('Create database failed: {0}', err instanceof Error ? err.message : String(err)));
       }
     }),
+    vscode.commands.registerCommand(COMMAND_IDS.REFRESH_TABLE_DATA, () => {
+      panelManager.refreshActiveTableData();
+    }),
     vscode.commands.registerCommand(COMMAND_IDS.DROP_DATABASE, async (node) => {
       const n = node as { connectionId: string; database?: string };
       if (!n.database) {

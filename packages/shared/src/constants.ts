@@ -25,6 +25,7 @@ export const COMMAND_IDS = {
   RESTORE_DATABASE: 'dbmanager.restoreDatabase',
   CREATE_DATABASE: 'dbmanager.createDatabase',
   DROP_DATABASE: 'dbmanager.dropDatabase',
+  REFRESH_TABLE_DATA: 'dbmanager.refreshTableData',
 } as const;
 
 export const DEFAULT_PORTS: Record<string, number> = {

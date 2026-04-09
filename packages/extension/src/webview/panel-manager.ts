@@ -102,6 +102,15 @@ export class WebviewPanelManager {
     this.showOrCreate(key, vscode.l10n.t('{0} — Export', tableName), { kind: 'export', connectionId, tableName, schema, database });
   }
 
+  refreshActiveTableData(): void {
+    for (const panel of this.panels.values()) {
+      if (panel.active) {
+        void panel.webview.postMessage({ type: 'refreshTableData' } satisfies ExtensionMessage);
+        break;
+      }
+    }
+  }
+
   openRedisBrowser(connectionId: string, db?: number): void {
     const key = `redis:${connectionId}:${db ?? 0}`;
     const label = this.getConnectionLabel(connectionId);

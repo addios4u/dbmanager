@@ -138,6 +138,11 @@
         "command": "dbmanager.dropDatabase",
         "title": "%command.dropDatabase%",
         "category": "%category.dbManager%"
+      },
+      {
+        "command": "dbmanager.refreshTableData",
+        "title": "Refresh Table Data",
+        "category": "DBManager"
       }
     ],
     "menus": {
@@ -270,6 +275,13 @@
           }
         ],
         "priority": "default"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "dbmanager.refreshTableData",
+        "key": "F5",
+        "when": "activeWebviewPanelId == 'dbmanager'"
       }
     ]
   },

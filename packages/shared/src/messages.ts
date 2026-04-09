@@ -132,7 +132,8 @@ export type ExtensionMessage =
         error?: string;
       }[];
       totalTime: number;
-    };
+    }
+  | { type: 'refreshTableData' };
 
 // Re-export used types to avoid unused import warnings
 export type { ConnectionConfig, ConnectionInfo, QueryResult, TableEdit, RedisKeyInfo, RedisValue, SchemaInfo, DatabaseInfo, ColumnMeta, ExportOptions };
