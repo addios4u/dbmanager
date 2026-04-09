@@ -519,9 +519,9 @@ export function TableDataView({ connectionId, table, schema, database }: TableDa
           style={{ fontSize: 11, padding: '2px 8px', flexShrink: 0 }}
           onClick={handleRefresh}
           disabled={isLoading}
-          title={l10n.t('Refresh')}
+          title={l10n.t('Refresh (F5)')}
         >
-          {l10n.t('Refresh')}
+          {l10n.t('Refresh (F5)')}
         </button>
 
         <span style={{ flex: 1 }} />
